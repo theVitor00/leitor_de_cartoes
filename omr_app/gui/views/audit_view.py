@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QGraphicsPixmapItem, QGraphicsRectItem
 )
 from PySide6.QtCore import Qt, QRectF
-from PySide6.QtGui import QPixmap, QPen, QColor, QBrush, QWheelEvent
+from PySide6.QtGui import QPixmap, QPen, QColor, QBrush, QWheelEvent, QPainter
 from omr_app.database.models import Resultado, Aluno, Prova
 from omr_app.core.omr_engine import OMREngine
 
@@ -26,7 +26,7 @@ class ZoomableGraphicsView(QGraphicsView):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setDragMode(QGraphicsView.ScrollHandDrag)
-        self.setRenderHint(QGraphicsView.SmoothPixmapTransform)
+        self.setRenderHint(QPainter.SmoothPixmapTransform)
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
