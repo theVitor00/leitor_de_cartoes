@@ -1,6 +1,6 @@
 """
 Templates Management View (Gerenciador e Configurador de Modelos de Cartão).
-Allows creating, editing, deleting, and generating instant PDF previews of answer sheet templates.
+Supports 1, 2, 3, or 4 columns. Uses Font Awesome icons (qtawesome).
 """
 
 import os
@@ -9,9 +9,10 @@ import subprocess
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget,
     QTableWidgetItem, QHeaderView, QLineEdit, QComboBox, QDialog, QFormLayout,
-    QMessageBox, QSpinBox, QCheckBox, QFileDialog, QColorDialog, QFrame
+    QMessageBox, QSpinBox, QCheckBox, QFileDialog, QColorDialog
 )
 from PySide6.QtGui import QColor
+from omr_app.assets.icons import get_icon
 from omr_app.database.models import Template, Prova
 from omr_app.core.pdf_generator import OMRPDFGenerator
 
@@ -27,21 +28,20 @@ class TemplatesView(QWidget):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
 
-        # Header Bar
         top_layout = QHBoxLayout()
         lbl_title = QLabel("Gerenciador de Modelos de Cartão-Resposta (Templates)")
         lbl_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #00AEA7;")
         top_layout.addWidget(lbl_title)
         top_layout.addStretch()
 
-        btn_add_tmpl = QPushButton("📐 + Novo Modelo de Cartão")
+        btn_add_tmpl = QPushButton(" + Novo Modelo de Cartão")
+        btn_add_tmpl.setIcon(get_icon("plus"))
         btn_add_tmpl.setProperty("class", "btn-primary")
         btn_add_tmpl.clicked.connect(lambda: self._open_template_dialog())
         top_layout.addWidget(btn_add_tmpl)
 
         layout.addLayout(top_layout)
 
-        # Table of Templates
         self.table_templates = QTableWidget()
         self.table_templates.setColumnCount(8)
         self.table_templates.setHorizontalHeaderLabels([
@@ -72,21 +72,23 @@ class TemplatesView(QWidget):
             color_item.setForeground(QColor(t.cor_cabecalho_hex))
             self.table_templates.setItem(row, 6, color_item)
 
-            # Action Cell (Preview, Edit, Delete)
             cell_widget = QWidget()
             h_box = QHBoxLayout(cell_widget)
             h_box.setContentsMargins(4, 2, 4, 2)
             h_box.setSpacing(6)
 
-            btn_prev = QPushButton("👁️ Prévia")
+            btn_prev = QPushButton(" Prévia")
+            btn_prev.setIcon(get_icon("preview"))
             btn_prev.setProperty("class", "btn-outline")
             btn_prev.clicked.connect(lambda chk, tmpl=t: self._preview_template_pdf(tmpl))
 
-            btn_edit = QPushButton("✏️ Editar")
+            btn_edit = QPushButton(" Editar")
+            btn_edit.setIcon(get_icon("edit"))
             btn_edit.setProperty("class", "btn-secondary")
             btn_edit.clicked.connect(lambda chk, tmpl=t: self._open_template_dialog(tmpl))
 
-            btn_del = QPushButton("🗑️")
+            btn_del = QPushButton()
+            btn_del.setIcon(get_icon("delete"))
             btn_del.setProperty("class", "btn-danger")
             btn_del.clicked.connect(lambda chk, tmpl=t: self._delete_template(tmpl))
 
@@ -120,26 +122,27 @@ class TemplatesView(QWidget):
             if idx >= 0:
                 combo_opts.setCurrentIndex(idx)
         else:
-            combo_opts.setCurrentIndex(2)  # default 5
+            combo_opts.setCurrentIndex(2)
 
         combo_cols = QComboBox()
         combo_cols.addItem("1 Coluna", 1)
         combo_cols.addItem("2 Colunas", 2)
         combo_cols.addItem("3 Colunas", 3)
+        combo_cols.addItem("4 Colunas", 4)
         if template_obj:
             idx = combo_cols.findData(template_obj.colunas)
             if idx >= 0:
                 combo_cols.setCurrentIndex(idx)
         else:
-            combo_cols.setCurrentIndex(1)  # default 2 cols
+            combo_cols.setCurrentIndex(1)
 
         chk_assinatura = QCheckBox("Exibir caixa de Assinatura do Aluno")
         chk_assinatura.setChecked(template_obj.exibir_assinatura if template_obj else True)
 
-        # Header color picker row
         color_layout = QHBoxLayout()
         txt_hex = QLineEdit(template_obj.cor_cabecalho_hex if template_obj else "#00AEA7")
-        btn_pick_color = QPushButton("🎨 Escolher Cor")
+        btn_pick_color = QPushButton(" Escolher Cor")
+        btn_pick_color.setIcon(get_icon("color"))
         btn_pick_color.setProperty("class", "btn-outline")
 
         def pick_color():
@@ -151,11 +154,11 @@ class TemplatesView(QWidget):
         color_layout.addWidget(txt_hex)
         color_layout.addWidget(btn_pick_color)
 
-        # Logo file picker row
         logo_layout = QHBoxLayout()
         txt_logo = QLineEdit(template_obj.caminho_logo if (template_obj and template_obj.caminho_logo) else "")
         txt_logo.setPlaceholderText("Caminho da imagem da logo (PNG/JPG)")
-        btn_logo = QPushButton("📁 Buscar Logo")
+        btn_logo = QPushButton(" Buscar Logo")
+        btn_logo.setIcon(get_icon("folder"))
         btn_logo.setProperty("class", "btn-outline")
 
         def pick_logo():
@@ -177,14 +180,13 @@ class TemplatesView(QWidget):
 
         vbox.addLayout(form)
 
-        # Action Buttons Layout (Gerar Prévia + Salvar)
         btn_box = QHBoxLayout()
 
-        btn_prev = QPushButton("👁️ Gerar Prévia em PDF")
+        btn_prev = QPushButton(" Gerar Prévia em PDF")
+        btn_prev.setIcon(get_icon("preview"))
         btn_prev.setProperty("class", "btn-secondary")
 
         def generate_temp_preview():
-            # Build ephemeral template structure
             temp_pdf = os.path.join(tempfile.gettempdir(), "previa_template_omr.pdf")
             generator = OMRPDFGenerator(temp_pdf)
             generator.build_pdf(
@@ -204,19 +206,19 @@ class TemplatesView(QWidget):
                 caminho_logo=txt_logo.text().strip() if txt_logo.text().strip() else None
             )
 
-            # Open PDF with OS default program
             try:
                 if os.name == 'nt':
                     os.startfile(temp_pdf)
                 else:
                     subprocess.run(["xdg-open", temp_pdf])
-            except Exception as e:
+            except Exception:
                 QMessageBox.information(dialog, "Prévia Gerada", f"PDF salvo em:\n{temp_pdf}")
 
         btn_prev.clicked.connect(generate_temp_preview)
         btn_box.addWidget(btn_prev)
 
         btn_save = QPushButton("Salvar Modelo")
+        btn_save.setIcon(get_icon("check"))
         btn_save.setProperty("class", "btn-primary")
 
         def save():
@@ -290,7 +292,6 @@ class TemplatesView(QWidget):
             QMessageBox.information(self, "Prévia Gerada", f"PDF gerado com sucesso em:\n{temp_pdf}")
 
     def _delete_template(self, template_obj: Template):
-        # Check if template is used by any exam
         provas_count = Prova.select().where(Prova.template == template_obj).count()
         if provas_count > 0:
             QMessageBox.warning(

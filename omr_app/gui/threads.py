@@ -1,6 +1,7 @@
 """
 PySide6 QThread Workers for non-blocking background processing.
 Supports dynamic Template settings and custom OMR sensitivity.
+Clean logging without unicode emojis.
 """
 
 import os
@@ -30,7 +31,7 @@ class CorrectionWorker(QThread):
         self.logger = ProcessLogger()
 
     def run(self):
-        self.log_emitted.emit(f"🚀 Iniciando varredura em lote com Sensibilidade OMR em {self.sensitivity_pct:.0f}%...")
+        self.log_emitted.emit(f"Iniciando varredura em lote com Sensibilidade OMR em {self.sensitivity_pct:.0f}%...")
 
         images_to_process = []
         for fp in self.file_paths:
@@ -39,21 +40,20 @@ class CorrectionWorker(QThread):
                 for page_num, img_bgr in imgs:
                     images_to_process.append((fp, page_num, img_bgr))
             except Exception as e:
-                self.log_emitted.emit(f"⚠️ Erro ao carregar arquivo '{os.path.basename(fp)}': {e}")
+                self.log_emitted.emit(f"Erro ao carregar arquivo '{os.path.basename(fp)}': {e}")
 
         total_sheets = len(images_to_process)
         if total_sheets == 0:
-            self.log_emitted.emit("❌ Nenhum arquivo/página válido para processamento.")
+            self.log_emitted.emit("Nenhum arquivo/página válido para processamento.")
             self.finished.emit({"total": 0, "sucessos": 0, "revisoes": 0, "erros": 0})
             return
 
-        self.log_emitted.emit(f"📊 Total de páginas/folhas a processar: {total_sheets}")
+        self.log_emitted.emit(f"Total de páginas/folhas a processar: {total_sheets}")
 
         prova = Prova.get_or_none(Prova.id == self.target_prova_id) if self.target_prova_id else None
         gabarito = prova.get_gabarito() if prova else {}
         valor_total = prova.valor_total if prova else 10.0
 
-        # Template settings
         tmpl = prova.template if (prova and prova.template) else None
         num_questions = tmpl.quantidade_questoes if tmpl else (len(gabarito) if gabarito else 10)
         num_options = tmpl.alternativas_por_questao if tmpl else 5
@@ -66,7 +66,7 @@ class CorrectionWorker(QThread):
 
         for idx, (orig_fp, page_num, img_bgr) in enumerate(images_to_process, 1):
             self.progress_changed.emit(idx, total_sheets)
-            self.log_emitted.emit(f"📄 Processando {os.path.basename(orig_fp)} (pág {page_num})...")
+            self.log_emitted.emit(f"Processando {os.path.basename(orig_fp)} (pág {page_num})...")
 
             res = self.engine.process_sheet_image(
                 image_bgr=img_bgr,
@@ -112,13 +112,13 @@ class CorrectionWorker(QThread):
             st = res['status']
             if st == "OK":
                 sucessos += 1
-                self.log_emitted.emit(f"  ✅ [OK] Aluno ID: {a_id or 'Desconhecido'} - Nota: {res['nota_final']}")
+                self.log_emitted.emit(f"  [OK] Aluno ID: {a_id or 'Desconhecido'} - Nota: {res['nota_final']}")
             elif st == "REVISAO_NECESSARIA":
                 revisoes += 1
-                self.log_emitted.emit(f"  🟡 [REVISÃO] {res['mensagem']}")
+                self.log_emitted.emit(f"  [REVISÃO] {res['mensagem']}")
             else:
                 erros += 1
-                self.log_emitted.emit(f"  🔴 [ERRO] {res['mensagem']}")
+                self.log_emitted.emit(f"  [ERRO] {res['mensagem']}")
 
             detalhes_lote.append(res)
             self.sheet_processed.emit(res)
@@ -140,7 +140,7 @@ class CorrectionWorker(QThread):
         }
 
         self.log_emitted.emit(
-            f"🎉 Lote concluído! Total: {total_sheets} | Sucessos: {sucessos} | Revisões: {revisoes} | Erros: {erros}"
+            f"Lote concluído! Total: {total_sheets} | Sucessos: {sucessos} | Revisões: {revisoes} | Erros: {erros}"
         )
         self.finished.emit(summary)
 
@@ -162,7 +162,7 @@ class PDFGeneratorWorker(QThread):
     def run(self):
         prova = Prova.get_or_none(Prova.id == self.prova_id)
         if not prova:
-            self.log_emitted.emit("❌ Prova não encontrada.")
+            self.log_emitted.emit("Prova não encontrada.")
             self.finished.emit("")
             return
 
@@ -186,13 +186,12 @@ class PDFGeneratorWorker(QThread):
 
         generator = OMRPDFGenerator(final_pdf_path)
 
-        self.log_emitted.emit(f"🖨️ Gerando cartões de resposta (Template: {tmpl.nome if tmpl else 'Padrão'}) para {total} alunos...")
+        self.log_emitted.emit(f"Gerando cartões de resposta (Template: {tmpl.nome if tmpl else 'Padrão'}) para {total} alunos...")
 
         for idx, aluno in enumerate(alunos, 1):
             self.progress_changed.emit(idx, total)
-            self.log_emitted.emit(f"  📄 Desenhando cartão do aluno: {aluno.nome} ({aluno.matricula})")
+            self.log_emitted.emit(f"  Desenhando cartão do aluno: {aluno.nome} ({aluno.matricula})")
 
-            header_color = OMRPDFGenerator(final_pdf_path)
             from reportlab.lib import colors
             color_obj = colors.HexColor(cor_cabecalho_hex) if cor_cabecalho_hex else colors.HexColor("#00AEA7")
 
@@ -220,5 +219,5 @@ class PDFGeneratorWorker(QThread):
             c_master.showPage()
 
         c_master.save()
-        self.log_emitted.emit(f"✅ Arquivo PDF gerado com sucesso: {final_pdf_path}")
+        self.log_emitted.emit(f"Arquivo PDF gerado com sucesso: {final_pdf_path}")
         self.finished.emit(final_pdf_path)

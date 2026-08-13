@@ -1,6 +1,7 @@
 """
 PDF Answer Sheet Generator View.
 Selects Exam and Class students to emit PDF files.
+Uses Font Awesome icons (qtawesome) without text emojis.
 """
 
 import os
@@ -9,6 +10,7 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QFileDialog, QMessageBox,
     QProgressBar, QTextEdit
 )
+from omr_app.assets.icons import get_icon
 from omr_app.database.models import Prova, Aluno, ProvaAluno
 from omr_app.gui.threads import PDFGeneratorWorker
 
@@ -25,12 +27,10 @@ class GeneratorView(QWidget):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
 
-        # Header Title
         lbl_title = QLabel("Gerador de Cartões-Resposta (PDF Vetorial)")
         lbl_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #00AEA7;")
         layout.addWidget(lbl_title)
 
-        # Selection Bar
         sel_layout = QHBoxLayout()
         lbl_p = QLabel("Selecione a Prova:")
         sel_layout.addWidget(lbl_p)
@@ -39,14 +39,14 @@ class GeneratorView(QWidget):
         self.combo_provas.currentIndexChanged.connect(self._on_prova_selected)
         sel_layout.addWidget(self.combo_provas, stretch=1)
 
-        btn_gen = QPushButton("🖨️ Gerar PDF de Cartões")
+        btn_gen = QPushButton(" Gerar PDF de Cartões")
+        btn_gen.setIcon(get_icon("generator"))
         btn_gen.setProperty("class", "btn-primary")
         btn_gen.clicked.connect(self._generate_pdf)
         sel_layout.addWidget(btn_gen)
 
         layout.addLayout(sel_layout)
 
-        # Table of Students included in exam
         lbl_st = QLabel("Alunos Nominalizados para esta Prova:")
         lbl_st.setStyleSheet("font-weight: bold; font-size: 14px;")
         layout.addWidget(lbl_st)
@@ -57,7 +57,6 @@ class GeneratorView(QWidget):
         self.table_alunos.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         layout.addWidget(self.table_alunos)
 
-        # Progress bar & log output
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
         layout.addWidget(self.progress_bar)
@@ -101,7 +100,6 @@ class GeneratorView(QWidget):
             QMessageBox.warning(self, "Aviso", "Selecione uma prova.")
             return
 
-        # Fetch student IDs
         aluno_ids = []
         for r in range(self.table_alunos.rowCount()):
             a_id = int(self.table_alunos.item(r, 0).text())

@@ -1,6 +1,7 @@
 """
 Batch Correction Execution View with Real-time Counters, Progress Bar,
 Dynamic OMR Sensitivity QSlider, and Live Log Console.
+Uses Font Awesome icons (qtawesome) without text emojis.
 """
 
 import os
@@ -10,6 +11,7 @@ from PySide6.QtWidgets import (
     QSlider
 )
 from PySide6.QtCore import Qt, Signal
+from omr_app.assets.icons import get_icon
 from omr_app.database.models import Prova, Resultado
 from omr_app.gui.threads import CorrectionWorker
 
@@ -28,12 +30,10 @@ class CorrectionView(QWidget):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
 
-        # Header Title
         lbl_title = QLabel("Executar Correção Automática em Lote")
         lbl_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #00AEA7;")
         layout.addWidget(lbl_title)
 
-        # Target Exam Selector & File Upload Row
         top_box = QFrame()
         top_box.setProperty("class", "card-frame")
         top_layout = QHBoxLayout(top_box)
@@ -45,12 +45,14 @@ class CorrectionView(QWidget):
         self.combo_provas = QComboBox()
         top_layout.addWidget(self.combo_provas, stretch=1)
 
-        btn_select = QPushButton("📁 Selecionar Imagens / PDFs")
+        btn_select = QPushButton(" Selecionar Arquivos")
+        btn_select.setIcon(get_icon("folder"))
         btn_select.setProperty("class", "btn-secondary")
         btn_select.clicked.connect(self._select_files)
         top_layout.addWidget(btn_select)
 
-        self.btn_run = QPushButton("▶ Iniciar Correção")
+        self.btn_run = QPushButton(" Iniciar Correção")
+        self.btn_run.setIcon(get_icon("correction"))
         self.btn_run.setProperty("class", "btn-primary")
         self.btn_run.setEnabled(False)
         self.btn_run.clicked.connect(self._start_correction)
@@ -62,12 +64,11 @@ class CorrectionView(QWidget):
         self.lbl_selected_info.setStyleSheet("color: #94A3B8; font-style: italic;")
         layout.addWidget(self.lbl_selected_info)
 
-        # OMR SENSITIVITY QSLIDER CONTROL BOX
         sens_box = QFrame()
         sens_box.setProperty("class", "card-frame")
         sens_layout = QHBoxLayout(sens_box)
 
-        self.lbl_sens_title = QLabel("🎚️ Sensibilidade OMR (Threshold de Preenchimento): 45%")
+        self.lbl_sens_title = QLabel("Sensibilidade OMR (Threshold de Preenchimento): 45%")
         self.lbl_sens_title.setStyleSheet("font-weight: bold; color: #00AEA7;")
         sens_layout.addWidget(self.lbl_sens_title)
 
@@ -88,7 +89,6 @@ class CorrectionView(QWidget):
 
         layout.addWidget(sens_box)
 
-        # REAL-TIME COUNTERS GRID (5 KPI Cards)
         counters_grid = QGridLayout()
         counters_grid.setSpacing(12)
 
@@ -106,13 +106,11 @@ class CorrectionView(QWidget):
 
         layout.addLayout(counters_grid)
 
-        # Fluid Progress Bar
         self.progress_bar = QProgressBar()
         self.progress_bar.setValue(0)
         self.progress_bar.setFixedHeight(24)
         layout.addWidget(self.progress_bar)
 
-        # Live Log Console
         lbl_console = QLabel("Console de Execução ao Vivo:")
         lbl_console.setStyleSheet("font-weight: bold; margin-top: 5px;")
         layout.addWidget(lbl_console)
@@ -128,7 +126,7 @@ class CorrectionView(QWidget):
         self.refresh_historical_counters()
 
     def _on_sens_changed(self, val: int):
-        self.lbl_sens_title.setText(f"🎚️ Sensibilidade OMR (Threshold de Preenchimento): {val}%")
+        self.lbl_sens_title.setText(f"Sensibilidade OMR (Threshold de Preenchimento): {val}%")
 
     def load_provas_combo(self):
         self.combo_provas.clear()
@@ -171,7 +169,7 @@ class CorrectionView(QWidget):
         )
         if files:
             self.selected_files = files
-            self.lbl_selected_info.setText(f"📁 {len(files)} arquivo(s) selecionado(s) para processamento.")
+            self.lbl_selected_info.setText(f"{len(files)} arquivo(s) selecionado(s) para processamento.")
             self.btn_run.setEnabled(True)
         else:
             self.selected_files = []
@@ -232,7 +230,7 @@ class CorrectionView(QWidget):
             self,
             "Processamento Concluído",
             f"Lote de {summary.get('total')} folhas concluído com sucesso!\n"
-            f"🟢 Sucessos: {summary.get('sucessos')}\n"
-            f"🟡 Pendentes de Revisão: {summary.get('revisoes')}\n"
-            f"🔴 Erros: {summary.get('erros')}"
+            f"Sucessos: {summary.get('sucessos')}\n"
+            f"Pendentes de Revisão: {summary.get('revisoes')}\n"
+            f"Erros: {summary.get('erros')}"
         )

@@ -1,6 +1,6 @@
 """
 Core OMR OpenCV Engine for Perspective Calibration, QR Code Reading,
-Dynamic Bubble Sampling (1-3 cols, 3-5 options), Custom Sensitivity Slider,
+Dynamic Bubble Sampling (1-4 cols, 3-5 options), Custom Sensitivity Slider,
 and Automatic Grading with Bounding Box Coordinates for Audit.
 """
 
@@ -81,7 +81,7 @@ class OMREngine:
         acertos = 0
         status = "OK"
         detalhes_status = []
-        flagged_boxes = []  # list of dicts with question bounding box coords for audit UI
+        flagged_boxes = []
 
         if not qr_valid:
             status = "REVISAO_NECESSARIA"
@@ -95,11 +95,10 @@ class OMREngine:
                     status = "REVISAO_NECESSARIA"
                     detalhes_status.append(f"Questão {q_str}: Dupla marcação ({resp_lid}).")
                 elif resp_lid == "-":
-                    pass  # Blank answer
+                    pass
                 elif resp_lid == gab_resp:
                     acertos += 1
 
-                # Extract bounding box for flagged question
                 if "|" in resp_lid or not qr_valid:
                     q_num = int(q_str)
                     box = self._get_question_bounding_box(q_num, num_questions, num_options, colunas)
@@ -206,7 +205,7 @@ class OMREngine:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
-        cols = max(1, min(3, colunas))
+        cols = max(1, min(4, colunas))
         q_per_col = (num_questions + cols - 1) // cols
         options_letters = ["A", "B", "C", "D", "E"][:num_options]
 
@@ -219,12 +218,15 @@ class OMREngine:
         grid_height = 780
         row_step = grid_height / max(q_per_col, 1)
 
-        # Horizontal positioning based on 1, 2, or 3 columns
         for q in range(1, num_questions + 1):
             col_idx = (q - 1) // q_per_col
             q_in_col = (q - 1) % q_per_col
 
-            if cols == 3:
+            if cols == 4:
+                col_x_start = 80 + (col_idx * 210)
+                opt_spacing = 30
+                r = 8
+            elif cols == 3:
                 col_x_start = 110 + (col_idx * 280)
                 opt_spacing = 38
                 r = 10
@@ -242,7 +244,7 @@ class OMREngine:
             option_fills = []
 
             for opt_idx, letter in enumerate(options_letters):
-                cx = col_x_start + 90 + (opt_idx * opt_spacing)
+                cx = col_x_start + (60 if cols == 4 else 90) + (opt_idx * opt_spacing)
                 cy = row_y
 
                 y1, y2 = max(0, cy - r), min(WARP_HEIGHT, cy + r)
@@ -255,7 +257,6 @@ class OMREngine:
 
                 option_fills.append((letter, ratio, cx, cy))
 
-            # Apply sensitivity threshold
             marked_opts = [opt for opt, fill_ratio, cx, cy in option_fills if fill_ratio >= threshold_ratio]
 
             if len(marked_opts) == 1:
@@ -272,8 +273,7 @@ class OMREngine:
     def _get_question_bounding_box(
         self, q_num: int, num_questions: int, num_options: int, colunas: int
     ) -> list[int]:
-        """Calculates exact bounding box [x, y, w, h] for a given question row."""
-        cols = max(1, min(3, colunas))
+        cols = max(1, min(4, colunas))
         q_per_col = (num_questions + cols - 1) // cols
 
         col_idx = (q_num - 1) // q_per_col
@@ -285,7 +285,10 @@ class OMREngine:
 
         row_y = grid_top_y + int(q_in_col * row_step)
 
-        if cols == 3:
+        if cols == 4:
+            col_x_start = 80 + (col_idx * 210)
+            box_w = 200
+        elif cols == 3:
             col_x_start = 110 + (col_idx * 280)
             box_w = 260
         elif cols == 2:
@@ -295,7 +298,7 @@ class OMREngine:
             col_x_start = 180
             box_w = 550
 
-        x = col_x_start - 20
+        x = col_x_start - 15
         y = row_y - 15
         w = box_w
         h = max(24, int(row_step))
@@ -321,15 +324,15 @@ class OMREngine:
 
                 if letter in marked_ans.split("|"):
                     if "|" in marked_ans:
-                        color = (0, 215, 255)  # Yellow for double mark
+                        color = (0, 215, 255)
                         thickness = 3
                     elif gab_ans and letter == gab_ans:
-                        color = (0, 200, 0)    # Green for correct
+                        color = (0, 200, 0)
                         thickness = 3
                     elif gab_ans and letter != gab_ans:
-                        color = (0, 0, 255)    # Red for wrong choice
+                        color = (0, 0, 255)
                         thickness = 3
 
-                cv2.circle(annotated, (cx, cy), 13, color, thickness)
+                cv2.circle(annotated, (cx, cy), 11, color, thickness)
 
         return annotated

@@ -1,5 +1,6 @@
 """
 Dashboard View showing KPI cards, real-time metrics, quick actions, and recent activity.
+Uses Font Awesome icons (qtawesome) without text emojis.
 """
 
 from PySide6.QtWidgets import (
@@ -7,11 +8,12 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QHeaderView, QGridLayout
 )
 from PySide6.QtCore import Qt, Signal
+from omr_app.assets.icons import get_icon
 from omr_app.database.models import Resultado, Prova, Aluno, Turma, LogLeitura
 
 
 class DashboardView(QWidget):
-    navigate_to = Signal(int)  # Signal to switch sidebar view
+    navigate_to = Signal(int)
 
     def __init__(self):
         super().__init__()
@@ -27,7 +29,7 @@ class DashboardView(QWidget):
         title_label.setStyleSheet("font-size: 22px; font-weight: bold; color: #00AEA7;")
         layout.addWidget(title_label)
 
-        # KPI Cards Grid (4 Cards)
+        # KPI Cards Grid
         kpi_grid = QGridLayout()
         kpi_grid.setSpacing(16)
 
@@ -52,19 +54,22 @@ class DashboardView(QWidget):
         lbl_actions.setStyleSheet("font-weight: bold; font-size: 14px;")
         actions_layout.addWidget(lbl_actions)
 
-        btn_corr = QPushButton("▶ Executar Nova Correção")
+        btn_corr = QPushButton(" Executar Nova Correção")
+        btn_corr.setIcon(get_icon("correction"))
         btn_corr.setProperty("class", "btn-primary")
-        btn_corr.clicked.connect(lambda: self.navigate_to.emit(4))  # Index 4 = Executar Correção
+        btn_corr.clicked.connect(lambda: self.navigate_to.emit(5))
         actions_layout.addWidget(btn_corr)
 
-        btn_audit = QPushButton("🔍 Fila de Auditoria")
+        btn_audit = QPushButton(" Fila de Auditoria")
+        btn_audit.setIcon(get_icon("audit"))
         btn_audit.setProperty("class", "btn-secondary")
-        btn_audit.clicked.connect(lambda: self.navigate_to.emit(5))  # Index 5 = Auditoria
+        btn_audit.clicked.connect(lambda: self.navigate_to.emit(6))
         actions_layout.addWidget(btn_audit)
 
-        btn_gen = QPushButton("🖨️ Gerar Cartões PDF")
+        btn_gen = QPushButton(" Gerar Cartões PDF")
+        btn_gen.setIcon(get_icon("generator"))
         btn_gen.setProperty("class", "btn-outline")
-        btn_gen.clicked.connect(lambda: self.navigate_to.emit(3))  # Index 3 = Gerador
+        btn_gen.clicked.connect(lambda: self.navigate_to.emit(4))
         actions_layout.addWidget(btn_gen)
 
         actions_layout.addStretch()
@@ -102,7 +107,6 @@ class DashboardView(QWidget):
         return {"frame": frame, "value_label": lbl_v}
 
     def refresh_dashboard(self):
-        """Reloads metrics from SQLite database."""
         try:
             total_corrigidas = Resultado.select().count()
             sucessos = Resultado.select().where(Resultado.status == "OK").count()
@@ -114,7 +118,6 @@ class DashboardView(QWidget):
             self.kpi_revisoes["value_label"].setText(str(revisoes))
             self.kpi_provas_ativas["value_label"].setText(str(total_provas))
 
-            # Populate recent table
             recentes = Resultado.select().order_by(Resultado.data_correcao.desc()).limit(8)
             self.table_recent.setRowCount(0)
 

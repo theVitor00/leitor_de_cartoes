@@ -1,6 +1,7 @@
 """
 Manual Audit Queue View with Interactive QGraphicsView (Zoom/Pan)
 and Bounding Box Highlight Overlays for flagged questions.
+Uses Font Awesome icons (qtawesome) without text emojis.
 """
 
 import os
@@ -14,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import QPixmap, QPen, QColor, QBrush, QWheelEvent, QPainter
+from omr_app.assets.icons import get_icon
 from omr_app.database.models import Resultado, Aluno, Prova
 from omr_app.core.omr_engine import OMREngine
 
@@ -56,7 +58,8 @@ class AuditView(QWidget):
         top_layout.addWidget(lbl_title)
         top_layout.addStretch()
 
-        btn_refresh = QPushButton("🔄 Atualizar Fila")
+        btn_refresh = QPushButton(" Atualizar Fila")
+        btn_refresh.setIcon(get_icon("sync"))
         btn_refresh.setProperty("class", "btn-secondary")
         btn_refresh.clicked.connect(self.load_pending_items)
         top_layout.addWidget(btn_refresh)
@@ -65,7 +68,6 @@ class AuditView(QWidget):
 
         splitter = QSplitter(Qt.Horizontal)
 
-        # LEFT PANEL: Table of Pending Scans & Interactive Image Viewer
         left_widget = QWidget()
         left_layout = QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 0, 0)
@@ -81,22 +83,24 @@ class AuditView(QWidget):
         self.table_pending.itemSelectionChanged.connect(self._on_item_selected)
         left_layout.addWidget(self.table_pending, stretch=1)
 
-        # Image Toolbar (Zoom In, Zoom Out, Reset)
         zoom_bar = QHBoxLayout()
         lbl_img_title = QLabel("Visualização com Zoom/Pan & Destaques OMR:")
         lbl_img_title.setStyleSheet("font-weight: bold;")
         zoom_bar.addWidget(lbl_img_title)
         zoom_bar.addStretch()
 
-        btn_zoom_in = QPushButton("🔍 Zoom In (+)")
+        btn_zoom_in = QPushButton(" Zoom In")
+        btn_zoom_in.setIcon(get_icon("zoom-in"))
         btn_zoom_in.setProperty("class", "btn-outline")
         btn_zoom_in.clicked.connect(lambda: self.graphics_view.scale(1.2, 1.2))
 
-        btn_zoom_out = QPushButton("🔍 Zoom Out (-)")
+        btn_zoom_out = QPushButton(" Zoom Out")
+        btn_zoom_out.setIcon(get_icon("zoom-out"))
         btn_zoom_out.setProperty("class", "btn-outline")
         btn_zoom_out.clicked.connect(lambda: self.graphics_view.scale(1 / 1.2, 1 / 1.2))
 
-        btn_reset_zoom = QPushButton("↺ Reset")
+        btn_reset_zoom = QPushButton(" Reset")
+        btn_reset_zoom.setIcon(get_icon("reset"))
         btn_reset_zoom.setProperty("class", "btn-outline")
         btn_reset_zoom.clicked.connect(self._reset_zoom)
 
@@ -105,14 +109,12 @@ class AuditView(QWidget):
         zoom_bar.addWidget(btn_reset_zoom)
         left_layout.addLayout(zoom_bar)
 
-        # QGraphicsView Scene
         self.scene = QGraphicsScene(self)
         self.graphics_view = ZoomableGraphicsView(self.scene)
         left_layout.addWidget(self.graphics_view, stretch=3)
 
         splitter.addWidget(left_widget)
 
-        # RIGHT PANEL: Interactive Decision Form
         right_frame = QFrame()
         right_frame.setProperty("class", "card-frame")
         right_layout = QVBoxLayout(right_frame)
@@ -145,12 +147,14 @@ class AuditView(QWidget):
         btn_layout = QVBoxLayout()
         btn_layout.setSpacing(10)
 
-        self.btn_confirm = QPushButton("✅ Confirmar / Ajustar Nota")
+        self.btn_confirm = QPushButton(" Confirmar / Ajustar Nota")
+        self.btn_confirm.setIcon(get_icon("check"))
         self.btn_confirm.setProperty("class", "btn-primary")
         self.btn_confirm.clicked.connect(self._confirm_override)
         btn_layout.addWidget(self.btn_confirm)
 
-        self.btn_anular = QPushButton("🚫 Anular Prova / Descartar")
+        self.btn_anular = QPushButton(" Anular Prova / Descartar")
+        self.btn_anular.setIcon(get_icon("danger"))
         self.btn_anular.setProperty("class", "btn-danger")
         self.btn_anular.clicked.connect(self._anular_prova)
         btn_layout.addWidget(self.btn_anular)
@@ -218,7 +222,6 @@ class AuditView(QWidget):
         self.txt_acertos.setText(str(r.acertos))
         self.txt_respostas_json.setText(r.respostas_marcadas_json)
 
-        # Clear and load scene
         self.scene.clear()
 
         if r.caminho_imagem_scan and os.path.exists(r.caminho_imagem_scan):
@@ -227,7 +230,6 @@ class AuditView(QWidget):
             self.scene.addItem(pixmap_item)
             self.scene.setSceneRect(QRectF(pixmap.rect()))
 
-            # Check answers for double marks / flagged questions and draw highlighted boxes
             respostas = r.get_respostas()
             prova = r.prova
             tmpl = prova.template if (prova and prova.template) else None
@@ -239,7 +241,6 @@ class AuditView(QWidget):
 
             for q_str, ans in respostas.items():
                 if "|" in ans or ans == "-":
-                    # Highlight question with yellow/red bounding rectangle overlay
                     q_num = int(q_str)
                     box = engine._get_question_bounding_box(q_num, num_q, num_opts, colunas)
                     x, y, w, h = box

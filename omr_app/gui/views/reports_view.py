@@ -1,6 +1,7 @@
 """
 Reports and Historical Analytics View.
 Includes Matplotlib performance charts, KPI cards, Excel export, and Process Logs drawer.
+Uses Font Awesome icons (qtawesome) without text emojis.
 """
 
 import os
@@ -15,6 +16,7 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QTabWidget, QFileDialog,
     QMessageBox, QFrame, QGridLayout, QTextEdit
 )
+from omr_app.assets.icons import get_icon
 from omr_app.database.models import Prova, Resultado, LogLeitura, Turma
 from omr_app.utils.excel_exporter import export_results_to_excel
 from omr_app.logs.process_logger import ProcessLogger
@@ -31,28 +33,25 @@ class ReportsView(QWidget):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
 
-        # Header Title & Export Bar
         top_layout = QHBoxLayout()
         lbl_title = QLabel("Relatórios & Análise Histórica de Desempenho")
         lbl_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #00AEA7;")
         top_layout.addWidget(lbl_title)
         top_layout.addStretch()
 
-        btn_excel = QPushButton("📊 Exportar para Excel (.xlsx)")
+        btn_excel = QPushButton(" Exportar para Excel (.xlsx)")
+        btn_excel.setIcon(get_icon("excel"))
         btn_excel.setProperty("class", "btn-secondary")
         btn_excel.clicked.connect(self._export_excel)
         top_layout.addWidget(btn_excel)
 
         layout.addLayout(top_layout)
 
-        # Main Tab Widget
         tabs = QTabWidget()
 
-        # TAB 1: Consolidated Results & Charts
         tab_analytics = QWidget()
         an_layout = QVBoxLayout(tab_analytics)
 
-        # Filter Prova Bar
         filter_layout = QHBoxLayout()
         lbl_p = QLabel("Selecione a Prova:")
         filter_layout.addWidget(lbl_p)
@@ -63,7 +62,6 @@ class ReportsView(QWidget):
 
         an_layout.addLayout(filter_layout)
 
-        # KPI Cards (Total Corrigidas, Média da Turma, Maior Nota, Menor Nota)
         kpi_grid = QGridLayout()
 
         self.card_total = self._create_kpi_card("Provas Corrigidas nesta Prova", "0", "#00AEA7")
@@ -78,26 +76,22 @@ class ReportsView(QWidget):
 
         an_layout.addLayout(kpi_grid)
 
-        # Split: Left Table vs Right Matplotlib Chart Canvas
         charts_layout = QHBoxLayout()
 
-        # Table of Results
         self.table_results = QTableWidget()
         self.table_results.setColumnCount(5)
         self.table_results.setHorizontalHeaderLabels(["Matrícula", "Aluno", "Acertos", "Nota", "Status"])
         self.table_results.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         charts_layout.addWidget(self.table_results, stretch=1)
 
-        # Matplotlib Chart Canvas Widget
         self.fig = Figure(figsize=(5, 4), dpi=100)
         self.fig.patch.set_facecolor('#1E293B')
         self.canvas = FigureCanvas(self.fig)
         charts_layout.addWidget(self.canvas, stretch=1)
 
         an_layout.addLayout(charts_layout)
-        tabs.addTab(tab_analytics, "📈 Análise de Desempenho & Itens")
+        tabs.addTab(tab_analytics, "Análise de Desempenho & Itens")
 
-        # TAB 2: Process Logs Drawer
         tab_logs = QWidget()
         log_layout = QVBoxLayout(tab_logs)
 
@@ -124,7 +118,7 @@ class ReportsView(QWidget):
         )
         log_layout.addWidget(self.txt_log_details, stretch=1)
 
-        tabs.addTab(tab_logs, "📋 Logs de Processamento")
+        tabs.addTab(tab_logs, "Logs de Processamento")
         layout.addWidget(tabs)
 
         self.load_provas_combo()
@@ -162,7 +156,6 @@ class ReportsView(QWidget):
 
         resultados = list(Resultado.select().where(Resultado.prova == prova))
 
-        # Update KPI Cards
         total_c = len(resultados)
         notas = [r.nota_final for r in resultados]
 
@@ -175,7 +168,6 @@ class ReportsView(QWidget):
         self.card_max["val_lbl"].setText(f"{max_n:.2f}")
         self.card_min["val_lbl"].setText(f"{min_n:.2f}")
 
-        # Update Table
         self.table_results.setRowCount(0)
         for r in resultados:
             row = self.table_results.rowCount()
@@ -190,7 +182,6 @@ class ReportsView(QWidget):
             self.table_results.setItem(row, 3, QTableWidgetItem(f"{r.nota_final:.2f}"))
             self.table_results.setItem(row, 4, QTableWidgetItem(r.status))
 
-        # Render Matplotlib Bar Chart (Distribution of Scores)
         self.fig.clear()
         ax = self.fig.add_subplot(111)
         ax.set_facecolor('#0F172A')

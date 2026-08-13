@@ -1,6 +1,7 @@
 """
 Main Window for the PySide6 OMR Desktop Application.
-Integrates Sidebar Navigation, Top Header with Theme Switcher, and View Stack including Templates Management.
+Integrates Sidebar Navigation, Top Header with Theme Switcher, and View Stack.
+Uses Font Awesome icons (qtawesome) without text emojis.
 """
 
 from PySide6.QtWidgets import (
@@ -9,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from omr_app.assets.icons import get_icon
 from omr_app.gui.theme_manager import ThemeManager
 from omr_app.gui.views.dashboard_view import DashboardView
 from omr_app.gui.views.students_view import StudentsView
@@ -46,11 +48,11 @@ class MainWindow(QMainWindow):
         sidebar_layout.setContentsMargins(12, 16, 12, 16)
         sidebar_layout.setSpacing(8)
 
-        lbl_logo = QLabel("🎯 LEITOR OMR")
+        lbl_logo = QLabel("LEITOR OMR")
         lbl_logo.setObjectName("SidebarTitle")
         sidebar_layout.addWidget(lbl_logo)
 
-        lbl_sub = QLabel("  Gestão & Correção de Cartões")
+        lbl_sub = QLabel("Gestão & Correção de Cartões")
         lbl_sub.setObjectName("SidebarSubtitle")
         sidebar_layout.addWidget(lbl_sub)
         sidebar_layout.addSpacing(16)
@@ -58,18 +60,19 @@ class MainWindow(QMainWindow):
         self.nav_buttons = []
 
         nav_items = [
-            ("📊 Dashboard", 0),
-            ("👥 Alunos & Turmas", 1),
-            ("📚 Disciplinas & Provas", 2),
-            ("📐 Modelos de Cartão", 3),
-            ("🖨️ Gerador de Cartões", 4),
-            ("▶ Executar Correção", 5),
-            ("🔍 Fila de Auditoria", 6),
-            ("📈 Relatórios & Logs", 7),
+            ("Dashboard", "dashboard", 0),
+            ("Alunos & Turmas", "students", 1),
+            ("Disciplinas & Provas", "exams", 2),
+            ("Modelos de Cartão", "templates", 3),
+            ("Gerador de Cartões", "generator", 4),
+            ("Executar Correção", "correction", 5),
+            ("Fila de Auditoria", "audit", 6),
+            ("Relatórios & Logs", "reports", 7),
         ]
 
-        for text, index in nav_items:
-            btn = QPushButton(text)
+        for text, icon_name, index in nav_items:
+            btn = QPushButton(f"  {text}")
+            btn.setIcon(get_icon(icon_name))
             btn.setProperty("class", "nav-btn")
             btn.setCheckable(True)
             btn.clicked.connect(lambda checked, idx=index: self._switch_view(idx))
@@ -78,7 +81,7 @@ class MainWindow(QMainWindow):
 
         sidebar_layout.addStretch()
 
-        lbl_ver = QLabel("v3.0.0 - PySide6 / OpenCV")
+        lbl_ver = QLabel("v3.1.0 - PySide6 / OpenCV")
         lbl_ver.setStyleSheet("color: #64748B; font-size: 11px; text-align: center;")
         lbl_ver.setAlignment(Qt.AlignCenter)
         sidebar_layout.addWidget(lbl_ver)
@@ -102,7 +105,8 @@ class MainWindow(QMainWindow):
 
         top_layout.addStretch()
 
-        self.btn_theme_toggle = QPushButton("🌙 Modo Escuro")
+        self.btn_theme_toggle = QPushButton(" Modo Escuro")
+        self.btn_theme_toggle.setIcon(get_icon("moon"))
         self.btn_theme_toggle.setProperty("class", "btn-outline")
         self.btn_theme_toggle.clicked.connect(self._toggle_theme)
         top_layout.addWidget(self.btn_theme_toggle)
@@ -177,9 +181,11 @@ class MainWindow(QMainWindow):
         is_dark = ThemeManager.toggle_theme(app)
 
         if is_dark:
-            self.btn_theme_toggle.setText("🌙 Modo Escuro")
+            self.btn_theme_toggle.setText(" Modo Escuro")
+            self.btn_theme_toggle.setIcon(get_icon("moon"))
         else:
-            self.btn_theme_toggle.setText("☀️ Modo Claro")
+            self.btn_theme_toggle.setText(" Modo Claro")
+            self.btn_theme_toggle.setIcon(get_icon("sun"))
 
     def _refresh_all_views(self):
         self.view_dashboard.refresh_dashboard()

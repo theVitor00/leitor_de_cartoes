@@ -1,6 +1,6 @@
 """
 Exams & Subjects View (CRUD for Materias, Provas and Interactive Answer Key Editor).
-Integrates Template selection for dynamic Gabarito matrix.
+Uses Font Awesome icons (qtawesome) without text emojis.
 """
 
 import json
@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QGridLayout, QScrollArea
 )
 from PySide6.QtCore import QDate
+from omr_app.assets.icons import get_icon
 from omr_app.database.models import Materia, Turma, Prova, ProvaAluno, Aluno, Template
 
 
@@ -31,12 +32,14 @@ class ExamsView(QWidget):
         top_layout.addWidget(lbl_title)
         top_layout.addStretch()
 
-        btn_add_mat = QPushButton("+ Nova Disciplina")
+        btn_add_mat = QPushButton(" Nova Disciplina")
+        btn_add_mat.setIcon(get_icon("plus"))
         btn_add_mat.setProperty("class", "btn-secondary")
         btn_add_mat.clicked.connect(self._open_add_materia_dialog)
         top_layout.addWidget(btn_add_mat)
 
-        btn_add_prova = QPushButton("+ Criar Nova Prova")
+        btn_add_prova = QPushButton(" Criar Nova Prova")
+        btn_add_prova.setIcon(get_icon("plus"))
         btn_add_prova.setProperty("class", "btn-primary")
         btn_add_prova.clicked.connect(self._open_add_prova_dialog)
         top_layout.addWidget(btn_add_prova)
@@ -84,6 +87,7 @@ class ExamsView(QWidget):
         form.addRow("Código da Disciplina:", txt_cod)
 
         btn = QPushButton("Salvar")
+        btn.setIcon(get_icon("check"))
         btn.setProperty("class", "btn-primary")
 
         def save():
@@ -151,12 +155,10 @@ class ExamsView(QWidget):
 
         vbox.addLayout(form)
 
-        # Gabarito Matrix Header
         lbl_gab = QLabel("Editor do Gabarito Oficial (Selecione a resposta correta para cada questão):")
         lbl_gab.setStyleSheet("font-weight: bold; color: #00AEA7; margin-top: 10px;")
         vbox.addWidget(lbl_gab)
 
-        # Scroll Area for Questions matrix
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         container_widget = QWidget()
@@ -202,6 +204,7 @@ class ExamsView(QWidget):
         vbox.addWidget(scroll)
 
         btn_save = QPushButton("Salvar Prova com Gabarito")
+        btn_save.setIcon(get_icon("check"))
         btn_save.setProperty("class", "btn-primary")
 
         def save_prova():

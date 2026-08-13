@@ -1,5 +1,6 @@
 """
 Students & Classes View (CRUD for Turmas & Alunos).
+Uses Font Awesome icons (qtawesome) without text emojis.
 """
 
 from PySide6.QtWidgets import (
@@ -7,6 +8,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QHeaderView, QLineEdit, QComboBox, QDialog, QFormLayout,
     QMessageBox, QSpinBox
 )
+from omr_app.assets.icons import get_icon
 from omr_app.database.models import Turma, Aluno
 
 
@@ -21,29 +23,29 @@ class StudentsView(QWidget):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
 
-        # Title Bar & Action Buttons
         top_layout = QHBoxLayout()
         lbl_title = QLabel("Gestão de Alunos e Turmas")
         lbl_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #00AEA7;")
         top_layout.addWidget(lbl_title)
         top_layout.addStretch()
 
-        btn_add_turma = QPushButton("+ Nova Turma")
+        btn_add_turma = QPushButton(" Nova Turma")
+        btn_add_turma.setIcon(get_icon("plus"))
         btn_add_turma.setProperty("class", "btn-secondary")
         btn_add_turma.clicked.connect(self._open_add_turma_dialog)
         top_layout.addWidget(btn_add_turma)
 
-        btn_add_aluno = QPushButton("+ Novo Aluno")
+        btn_add_aluno = QPushButton(" Novo Aluno")
+        btn_add_aluno.setIcon(get_icon("plus"))
         btn_add_aluno.setProperty("class", "btn-primary")
         btn_add_aluno.clicked.connect(self._open_add_aluno_dialog)
         top_layout.addWidget(btn_add_aluno)
 
         layout.addLayout(top_layout)
 
-        # Filter Bar
         filter_layout = QHBoxLayout()
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("🔍 Buscar por nome ou matrícula...")
+        self.search_input.setPlaceholderText("Buscar por nome ou matrícula...")
         self.search_input.textChanged.connect(self.load_data)
         filter_layout.addWidget(self.search_input)
 
@@ -53,7 +55,6 @@ class StudentsView(QWidget):
 
         layout.addLayout(filter_layout)
 
-        # Students Table
         self.table_alunos = QTableWidget()
         self.table_alunos.setColumnCount(4)
         self.table_alunos.setHorizontalHeaderLabels([
@@ -74,12 +75,10 @@ class StudentsView(QWidget):
     def load_data(self):
         query = Aluno.select()
 
-        # Apply search text
         text = self.search_input.text().strip()
         if text:
             query = query.where((Aluno.nome.contains(text)) | (Aluno.matricula.contains(text)))
 
-        # Apply turma filter
         t_id = self.combo_turma_filter.currentData()
         if t_id:
             query = query.where(Aluno.turma == t_id)
@@ -110,6 +109,7 @@ class StudentsView(QWidget):
         form.addRow("Ano Letivo:", spn_ano)
 
         btn_save = QPushButton("Salvar Turma")
+        btn_save.setIcon(get_icon("check"))
         btn_save.setProperty("class", "btn-primary")
 
         def save():
@@ -148,6 +148,7 @@ class StudentsView(QWidget):
         form.addRow("Turma:", combo_t)
 
         btn_save = QPushButton("Salvar Aluno")
+        btn_save.setIcon(get_icon("check"))
         btn_save.setProperty("class", "btn-primary")
 
         def save():
