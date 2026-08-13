@@ -23,6 +23,8 @@ ICON_MAP = {
     'edit': 'fa5s.pen',
     'delete': 'fa5s.trash-alt',
     'preview': 'fa5s.eye',
+    'pdf': 'fa5s.file-pdf',
+    'file-pdf': 'fa5s.file-pdf',
     'check': 'fa5s.check-circle',
     'warning': 'fa5s.exclamation-triangle',
     'danger': 'fa5s.ban',

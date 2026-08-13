@@ -1,6 +1,7 @@
 """
 Templates Management View (Gerenciador e Configurador de Modelos de Cartão).
-Supports 1, 2, 3, or 4 columns. Uses high-contrast Font Awesome icons.
+Supports 1, 2, 3, or 4 columns. Uses high-contrast Font Awesome icons
+with clear labels, tooltips, and consistent action column button layout.
 """
 
 import os
@@ -34,9 +35,10 @@ class TemplatesView(QWidget):
         top_layout.addWidget(lbl_title)
         top_layout.addStretch()
 
-        btn_add_tmpl = QPushButton(" + Novo Modelo de Cartão")
+        btn_add_tmpl = QPushButton(" Novo Modelo de Cartão")
         btn_add_tmpl.setIcon(get_icon("plus", color="white"))
         btn_add_tmpl.setProperty("class", "btn-primary")
+        btn_add_tmpl.setToolTip("Criar um novo modelo personalizado de cartão-resposta OMR")
         btn_add_tmpl.clicked.connect(lambda: self._open_template_dialog())
         top_layout.addWidget(btn_add_tmpl)
 
@@ -45,9 +47,10 @@ class TemplatesView(QWidget):
         self.table_templates = QTableWidget()
         self.table_templates.setColumnCount(8)
         self.table_templates.setHorizontalHeaderLabels([
-            "ID", "Nome do Modelo", "Questões", "Alternativas", "Colunas", "Assinatura", "Cor Cabeçalho", "Ações"
+            "ID", "Nome do Modelo", "Questões", "Alternativas", "Colunas", "Assinatura", "Cor Cabeçalho", "Ações do Modelo"
         ])
         self.table_templates.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table_templates.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeToContents)
         layout.addWidget(self.table_templates)
 
         self.load_data()
@@ -77,19 +80,25 @@ class TemplatesView(QWidget):
             h_box.setContentsMargins(4, 2, 4, 2)
             h_box.setSpacing(6)
 
-            btn_prev = QPushButton(" Prévia")
-            btn_prev.setIcon(get_icon("preview"))
+            # Action Button 1: PDF Preview
+            btn_prev = QPushButton(" Prévia PDF")
+            btn_prev.setIcon(get_icon("pdf"))
             btn_prev.setProperty("class", "btn-outline")
+            btn_prev.setToolTip("Gerar e abrir prévia do cartão-resposta em formato PDF")
             btn_prev.clicked.connect(lambda chk, tmpl=t: self._preview_template_pdf(tmpl))
 
+            # Action Button 2: Edit Template
             btn_edit = QPushButton(" Editar")
             btn_edit.setIcon(get_icon("edit", color="white"))
             btn_edit.setProperty("class", "btn-secondary")
+            btn_edit.setToolTip("Editar nome, questões, colunas ou visual deste modelo")
             btn_edit.clicked.connect(lambda chk, tmpl=t: self._open_template_dialog(tmpl))
 
-            btn_del = QPushButton()
+            # Action Button 3: Delete Template
+            btn_del = QPushButton(" Excluir")
             btn_del.setIcon(get_icon("delete", color="white"))
             btn_del.setProperty("class", "btn-danger")
+            btn_del.setToolTip("Excluir permanentemente este modelo de cartão")
             btn_del.clicked.connect(lambda chk, tmpl=t: self._delete_template(tmpl))
 
             h_box.addWidget(btn_prev)
@@ -144,6 +153,7 @@ class TemplatesView(QWidget):
         btn_pick_color = QPushButton(" Escolher Cor")
         btn_pick_color.setIcon(get_icon("color"))
         btn_pick_color.setProperty("class", "btn-outline")
+        btn_pick_color.setToolTip("Abrir paleta para selecionar a cor do cabeçalho")
 
         def pick_color():
             c = QColorDialog.getColor(QColor(txt_hex.text().strip()), dialog, "Selecione a Cor do Cabeçalho")
@@ -160,6 +170,7 @@ class TemplatesView(QWidget):
         btn_logo = QPushButton(" Buscar Logo")
         btn_logo.setIcon(get_icon("folder"))
         btn_logo.setProperty("class", "btn-outline")
+        btn_logo.setToolTip("Selecionar imagem de logo para o cabeçalho do cartão")
 
         def pick_logo():
             f, _ = QFileDialog.getOpenFileName(dialog, "Selecionar Logo", "", "Imagens (*.png *.jpg *.jpeg)")
@@ -183,8 +194,9 @@ class TemplatesView(QWidget):
         btn_box = QHBoxLayout()
 
         btn_prev = QPushButton(" Gerar Prévia em PDF")
-        btn_prev.setIcon(get_icon("preview", color="white"))
+        btn_prev.setIcon(get_icon("pdf", color="white"))
         btn_prev.setProperty("class", "btn-secondary")
+        btn_prev.setToolTip("Gerar prévia instantânea em PDF com os parâmetros acima")
 
         def generate_temp_preview():
             temp_pdf = os.path.join(tempfile.gettempdir(), "previa_template_omr.pdf")
@@ -220,6 +232,7 @@ class TemplatesView(QWidget):
         btn_save = QPushButton("Salvar Modelo")
         btn_save.setIcon(get_icon("check", color="white"))
         btn_save.setProperty("class", "btn-primary")
+        btn_save.setToolTip("Salvar modelo no banco de dados")
 
         def save():
             n = txt_nome.text().strip()
