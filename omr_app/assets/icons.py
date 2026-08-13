@@ -1,6 +1,7 @@
 """
 Icon Helper Utility using QtAwesome (Font Awesome 5 Solid Icons).
-Replaces text emojis with clean, professional vector icons.
+Dynamically adjusts default icon colors for Light and Dark modes
+to ensure maximum contrast and visibility.
 """
 
 import qtawesome as qta
@@ -42,12 +43,25 @@ ICON_MAP = {
 def get_icon(name: str, color: str = None) -> QIcon:
     """
     Returns a QIcon corresponding to the specified key.
-    If color is provided (hex string like '#00AEA7'), styles the icon accordingly.
+    Automatically adapts default color based on current Light/Dark mode for maximum contrast.
     """
     fa_name = ICON_MAP.get(name, 'fa5s.circle')
     try:
-        if color:
-            return qta.icon(fa_name, color=color)
-        return qta.icon(fa_name)
+        if not color:
+            from omr_app.gui.theme_manager import ThemeManager
+            if ThemeManager.is_dark_mode():
+                color = "#F8FAFC"  # High contrast crisp off-white for dark mode
+            else:
+                color = "#1E293B"  # High contrast dark slate for light mode
+        elif color == "white":
+            color = "#FFFFFF"
+        elif color == "primary":
+            color = "#00AEA7"
+        elif color == "secondary":
+            color = "#002970"
+        elif color == "danger":
+            color = "#EF4444"
+
+        return qta.icon(fa_name, color=color)
     except Exception:
         return QIcon()

@@ -1,7 +1,7 @@
 """
 PDF Answer Sheet Generator View.
 Selects Exam and Class students to emit PDF files.
-Uses Font Awesome icons (qtawesome) without text emojis.
+Uses high-contrast Font Awesome icons.
 """
 
 import os
@@ -40,7 +40,7 @@ class GeneratorView(QWidget):
         sel_layout.addWidget(self.combo_provas, stretch=1)
 
         btn_gen = QPushButton(" Gerar PDF de Cartões")
-        btn_gen.setIcon(get_icon("generator"))
+        btn_gen.setIcon(get_icon("generator", color="white"))
         btn_gen.setProperty("class", "btn-primary")
         btn_gen.clicked.connect(self._generate_pdf)
         sel_layout.addWidget(btn_gen)

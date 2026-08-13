@@ -1,7 +1,7 @@
 """
 Batch Correction Execution View with Real-time Counters, Progress Bar,
 Dynamic OMR Sensitivity QSlider, and Live Log Console.
-Uses Font Awesome icons (qtawesome) without text emojis.
+Uses high-contrast Font Awesome icons.
 """
 
 import os
@@ -46,13 +46,13 @@ class CorrectionView(QWidget):
         top_layout.addWidget(self.combo_provas, stretch=1)
 
         btn_select = QPushButton(" Selecionar Arquivos")
-        btn_select.setIcon(get_icon("folder"))
+        btn_select.setIcon(get_icon("folder", color="white"))
         btn_select.setProperty("class", "btn-secondary")
         btn_select.clicked.connect(self._select_files)
         top_layout.addWidget(btn_select)
 
         self.btn_run = QPushButton(" Iniciar Correção")
-        self.btn_run.setIcon(get_icon("correction"))
+        self.btn_run.setIcon(get_icon("correction", color="white"))
         self.btn_run.setProperty("class", "btn-primary")
         self.btn_run.setEnabled(False)
         self.btn_run.clicked.connect(self._start_correction)

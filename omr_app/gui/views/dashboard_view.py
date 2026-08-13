@@ -1,6 +1,6 @@
 """
 Dashboard View showing KPI cards, real-time metrics, quick actions, and recent activity.
-Uses Font Awesome icons (qtawesome) without text emojis.
+Uses high-contrast Font Awesome icons.
 """
 
 from PySide6.QtWidgets import (
@@ -55,13 +55,13 @@ class DashboardView(QWidget):
         actions_layout.addWidget(lbl_actions)
 
         btn_corr = QPushButton(" Executar Nova Correção")
-        btn_corr.setIcon(get_icon("correction"))
+        btn_corr.setIcon(get_icon("correction", color="white"))
         btn_corr.setProperty("class", "btn-primary")
         btn_corr.clicked.connect(lambda: self.navigate_to.emit(5))
         actions_layout.addWidget(btn_corr)
 
         btn_audit = QPushButton(" Fila de Auditoria")
-        btn_audit.setIcon(get_icon("audit"))
+        btn_audit.setIcon(get_icon("audit", color="white"))
         btn_audit.setProperty("class", "btn-secondary")
         btn_audit.clicked.connect(lambda: self.navigate_to.emit(6))
         actions_layout.addWidget(btn_audit)

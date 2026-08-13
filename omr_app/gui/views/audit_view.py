@@ -1,7 +1,7 @@
 """
 Manual Audit Queue View with Interactive QGraphicsView (Zoom/Pan)
 and Bounding Box Highlight Overlays for flagged questions.
-Uses Font Awesome icons (qtawesome) without text emojis.
+Uses high-contrast Font Awesome icons.
 """
 
 import os
@@ -59,7 +59,7 @@ class AuditView(QWidget):
         top_layout.addStretch()
 
         btn_refresh = QPushButton(" Atualizar Fila")
-        btn_refresh.setIcon(get_icon("sync"))
+        btn_refresh.setIcon(get_icon("sync", color="white"))
         btn_refresh.setProperty("class", "btn-secondary")
         btn_refresh.clicked.connect(self.load_pending_items)
         top_layout.addWidget(btn_refresh)
@@ -148,13 +148,13 @@ class AuditView(QWidget):
         btn_layout.setSpacing(10)
 
         self.btn_confirm = QPushButton(" Confirmar / Ajustar Nota")
-        self.btn_confirm.setIcon(get_icon("check"))
+        self.btn_confirm.setIcon(get_icon("check", color="white"))
         self.btn_confirm.setProperty("class", "btn-primary")
         self.btn_confirm.clicked.connect(self._confirm_override)
         btn_layout.addWidget(self.btn_confirm)
 
         self.btn_anular = QPushButton(" Anular Prova / Descartar")
-        self.btn_anular.setIcon(get_icon("danger"))
+        self.btn_anular.setIcon(get_icon("danger", color="white"))
         self.btn_anular.setProperty("class", "btn-danger")
         self.btn_anular.clicked.connect(self._anular_prova)
         btn_layout.addWidget(self.btn_anular)

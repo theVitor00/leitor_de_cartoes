@@ -1,7 +1,7 @@
 """
 Reports and Historical Analytics View.
 Includes Matplotlib performance charts, KPI cards, Excel export, and Process Logs drawer.
-Uses Font Awesome icons (qtawesome) without text emojis.
+Uses high-contrast Font Awesome icons.
 """
 
 import os
@@ -40,7 +40,7 @@ class ReportsView(QWidget):
         top_layout.addStretch()
 
         btn_excel = QPushButton(" Exportar para Excel (.xlsx)")
-        btn_excel.setIcon(get_icon("excel"))
+        btn_excel.setIcon(get_icon("excel", color="white"))
         btn_excel.setProperty("class", "btn-secondary")
         btn_excel.clicked.connect(self._export_excel)
         top_layout.addWidget(btn_excel)

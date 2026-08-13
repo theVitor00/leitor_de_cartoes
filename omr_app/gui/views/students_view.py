@@ -1,6 +1,6 @@
 """
 Students & Classes View (CRUD for Turmas & Alunos).
-Uses Font Awesome icons (qtawesome) without text emojis.
+Uses high-contrast Font Awesome icons.
 """
 
 from PySide6.QtWidgets import (
@@ -30,13 +30,13 @@ class StudentsView(QWidget):
         top_layout.addStretch()
 
         btn_add_turma = QPushButton(" Nova Turma")
-        btn_add_turma.setIcon(get_icon("plus"))
+        btn_add_turma.setIcon(get_icon("plus", color="white"))
         btn_add_turma.setProperty("class", "btn-secondary")
         btn_add_turma.clicked.connect(self._open_add_turma_dialog)
         top_layout.addWidget(btn_add_turma)
 
         btn_add_aluno = QPushButton(" Novo Aluno")
-        btn_add_aluno.setIcon(get_icon("plus"))
+        btn_add_aluno.setIcon(get_icon("plus", color="white"))
         btn_add_aluno.setProperty("class", "btn-primary")
         btn_add_aluno.clicked.connect(self._open_add_aluno_dialog)
         top_layout.addWidget(btn_add_aluno)
@@ -109,7 +109,7 @@ class StudentsView(QWidget):
         form.addRow("Ano Letivo:", spn_ano)
 
         btn_save = QPushButton("Salvar Turma")
-        btn_save.setIcon(get_icon("check"))
+        btn_save.setIcon(get_icon("check", color="white"))
         btn_save.setProperty("class", "btn-primary")
 
         def save():
@@ -148,7 +148,7 @@ class StudentsView(QWidget):
         form.addRow("Turma:", combo_t)
 
         btn_save = QPushButton("Salvar Aluno")
-        btn_save.setIcon(get_icon("check"))
+        btn_save.setIcon(get_icon("check", color="white"))
         btn_save.setProperty("class", "btn-primary")
 
         def save():

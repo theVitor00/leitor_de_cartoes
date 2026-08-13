@@ -1,7 +1,7 @@
 """
 Main Window for the PySide6 OMR Desktop Application.
 Integrates Sidebar Navigation, Top Header with Theme Switcher, and View Stack.
-Uses Font Awesome icons (qtawesome) without text emojis.
+Uses Font Awesome icons (qtawesome) with dynamic high contrast colors in Light & Dark modes.
 """
 
 from PySide6.QtWidgets import (
@@ -59,7 +59,7 @@ class MainWindow(QMainWindow):
 
         self.nav_buttons = []
 
-        nav_items = [
+        self.nav_items = [
             ("Dashboard", "dashboard", 0),
             ("Alunos & Turmas", "students", 1),
             ("Disciplinas & Provas", "exams", 2),
@@ -70,9 +70,8 @@ class MainWindow(QMainWindow):
             ("Relatórios & Logs", "reports", 7),
         ]
 
-        for text, icon_name, index in nav_items:
+        for text, icon_name, index in self.nav_items:
             btn = QPushButton(f"  {text}")
-            btn.setIcon(get_icon(icon_name))
             btn.setProperty("class", "nav-btn")
             btn.setCheckable(True)
             btn.clicked.connect(lambda checked, idx=index: self._switch_view(idx))
@@ -81,7 +80,7 @@ class MainWindow(QMainWindow):
 
         sidebar_layout.addStretch()
 
-        lbl_ver = QLabel("v3.1.0 - PySide6 / OpenCV")
+        lbl_ver = QLabel("v3.2.0 - PySide6 / OpenCV")
         lbl_ver.setStyleSheet("color: #64748B; font-size: 11px; text-align: center;")
         lbl_ver.setAlignment(Qt.AlignCenter)
         sidebar_layout.addWidget(lbl_ver)
@@ -106,7 +105,6 @@ class MainWindow(QMainWindow):
         top_layout.addStretch()
 
         self.btn_theme_toggle = QPushButton(" Modo Escuro")
-        self.btn_theme_toggle.setIcon(get_icon("moon"))
         self.btn_theme_toggle.setProperty("class", "btn-outline")
         self.btn_theme_toggle.clicked.connect(self._toggle_theme)
         top_layout.addWidget(self.btn_theme_toggle)
@@ -137,7 +135,6 @@ class MainWindow(QMainWindow):
         workspace_layout.addWidget(self.stack)
         main_layout.addWidget(workspace)
 
-        # Connect Navigation Signals
         self.view_dashboard.navigate_to.connect(self._switch_view)
         self.view_correction.batch_completed.connect(self._refresh_all_views)
 
@@ -146,8 +143,19 @@ class MainWindow(QMainWindow):
     def _switch_view(self, index: int):
         self.stack.setCurrentIndex(index)
 
+        is_dark = ThemeManager.is_dark_mode()
+
         for i, btn in enumerate(self.nav_buttons):
-            btn.setChecked(i == index)
+            is_active = (i == index)
+            btn.setChecked(is_active)
+            _, icon_name, _ = self.nav_items[i]
+
+            if is_active:
+                icon_color = "#FFFFFF"
+            else:
+                icon_color = "#F8FAFC" if is_dark else "#1E293B"
+
+            btn.setIcon(get_icon(icon_name, color=icon_color))
 
         titles = [
             "Dashboard", "Alunos & Turmas", "Disciplinas & Provas",
@@ -156,6 +164,14 @@ class MainWindow(QMainWindow):
         ]
         if index < len(titles):
             self.lbl_header_title.setText(titles[index])
+
+        # Toggle button icon update
+        if is_dark:
+            self.btn_theme_toggle.setText(" Modo Escuro")
+            self.btn_theme_toggle.setIcon(get_icon("moon", color="#F8FAFC"))
+        else:
+            self.btn_theme_toggle.setText(" Modo Claro")
+            self.btn_theme_toggle.setIcon(get_icon("sun", color="#1E293B"))
 
         if index == 0:
             self.view_dashboard.refresh_dashboard()
@@ -179,13 +195,7 @@ class MainWindow(QMainWindow):
     def _toggle_theme(self):
         app = QApplication.instance()
         is_dark = ThemeManager.toggle_theme(app)
-
-        if is_dark:
-            self.btn_theme_toggle.setText(" Modo Escuro")
-            self.btn_theme_toggle.setIcon(get_icon("moon"))
-        else:
-            self.btn_theme_toggle.setText(" Modo Claro")
-            self.btn_theme_toggle.setIcon(get_icon("sun"))
+        self._switch_view(self.stack.currentIndex())
 
     def _refresh_all_views(self):
         self.view_dashboard.refresh_dashboard()

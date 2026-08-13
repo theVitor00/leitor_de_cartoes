@@ -1,6 +1,6 @@
 """
 Templates Management View (Gerenciador e Configurador de Modelos de Cartão).
-Supports 1, 2, 3, or 4 columns. Uses Font Awesome icons (qtawesome).
+Supports 1, 2, 3, or 4 columns. Uses high-contrast Font Awesome icons.
 """
 
 import os
@@ -35,7 +35,7 @@ class TemplatesView(QWidget):
         top_layout.addStretch()
 
         btn_add_tmpl = QPushButton(" + Novo Modelo de Cartão")
-        btn_add_tmpl.setIcon(get_icon("plus"))
+        btn_add_tmpl.setIcon(get_icon("plus", color="white"))
         btn_add_tmpl.setProperty("class", "btn-primary")
         btn_add_tmpl.clicked.connect(lambda: self._open_template_dialog())
         top_layout.addWidget(btn_add_tmpl)
@@ -83,12 +83,12 @@ class TemplatesView(QWidget):
             btn_prev.clicked.connect(lambda chk, tmpl=t: self._preview_template_pdf(tmpl))
 
             btn_edit = QPushButton(" Editar")
-            btn_edit.setIcon(get_icon("edit"))
+            btn_edit.setIcon(get_icon("edit", color="white"))
             btn_edit.setProperty("class", "btn-secondary")
             btn_edit.clicked.connect(lambda chk, tmpl=t: self._open_template_dialog(tmpl))
 
             btn_del = QPushButton()
-            btn_del.setIcon(get_icon("delete"))
+            btn_del.setIcon(get_icon("delete", color="white"))
             btn_del.setProperty("class", "btn-danger")
             btn_del.clicked.connect(lambda chk, tmpl=t: self._delete_template(tmpl))
 
@@ -183,7 +183,7 @@ class TemplatesView(QWidget):
         btn_box = QHBoxLayout()
 
         btn_prev = QPushButton(" Gerar Prévia em PDF")
-        btn_prev.setIcon(get_icon("preview"))
+        btn_prev.setIcon(get_icon("preview", color="white"))
         btn_prev.setProperty("class", "btn-secondary")
 
         def generate_temp_preview():
@@ -218,7 +218,7 @@ class TemplatesView(QWidget):
         btn_box.addWidget(btn_prev)
 
         btn_save = QPushButton("Salvar Modelo")
-        btn_save.setIcon(get_icon("check"))
+        btn_save.setIcon(get_icon("check", color="white"))
         btn_save.setProperty("class", "btn-primary")
 
         def save():
