@@ -200,6 +200,14 @@ QPushButton.btn-danger:hover {
     background-color: #DC2626;
 }
 
+/* Compact Table Action Buttons */
+QPushButton.btn-sm {
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    min-height: 26px;
+}
+
 /* Progress Bar */
 QProgressBar {
     border: none;
@@ -223,16 +231,16 @@ QScrollBar:vertical {
     border-radius: 4px;
 }
 
-QScrollBar::handle:vertical {
+QScrollBar:handle:vertical {
     background-color: #334155;
     border-radius: 4px;
 }
 
-QScrollBar::handle:vertical:hover {
+QScrollBar:handle:vertical:hover {
     background-color: #00AEA7;
 }
 
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+QScrollBar:add-line:vertical, QScrollBar:sub-line:vertical {
     height: 0px;
 }
 
@@ -462,6 +470,14 @@ QPushButton.btn-danger:hover {
     background-color: #DC2626;
 }
 
+/* Compact Table Action Buttons */
+QPushButton.btn-sm {
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    min-height: 26px;
+}
+
 /* Progress Bar */
 QProgressBar {
     border: none;
@@ -485,16 +501,16 @@ QScrollBar:vertical {
     border-radius: 4px;
 }
 
-QScrollBar::handle:vertical {
+QScrollBar:handle:vertical {
     background-color: #CBD5E1;
     border-radius: 4px;
 }
 
-QScrollBar::handle:vertical:hover {
+QScrollBar:handle:vertical:hover {
     background-color: #00AEA7;
 }
 
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+QScrollBar:add-line:vertical, QScrollBar:sub-line:vertical {
     height: 0px;
 }
 

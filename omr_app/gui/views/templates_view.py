@@ -1,7 +1,7 @@
 """
 Templates Management View (Gerenciador e Configurador de Modelos de Cartão).
 Supports 1, 2, 3, or 4 columns. Uses high-contrast Font Awesome icons
-with clear labels, tooltips, and consistent action column button layout.
+with clear labels, tooltips, and non-clipping compact button sizing.
 """
 
 import os
@@ -50,7 +50,9 @@ class TemplatesView(QWidget):
             "ID", "Nome do Modelo", "Questões", "Alternativas", "Colunas", "Assinatura", "Cor Cabeçalho", "Ações do Modelo"
         ])
         self.table_templates.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table_templates.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeToContents)
+        self.table_templates.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
+        self.table_templates.setColumnWidth(7, 310)
+        self.table_templates.verticalHeader().setDefaultSectionSize(44)
         layout.addWidget(self.table_templates)
 
         self.load_data()
@@ -77,27 +79,27 @@ class TemplatesView(QWidget):
 
             cell_widget = QWidget()
             h_box = QHBoxLayout(cell_widget)
-            h_box.setContentsMargins(4, 2, 4, 2)
+            h_box.setContentsMargins(6, 4, 6, 4)
             h_box.setSpacing(6)
 
             # Action Button 1: PDF Preview
             btn_prev = QPushButton(" Prévia PDF")
             btn_prev.setIcon(get_icon("pdf"))
-            btn_prev.setProperty("class", "btn-outline")
+            btn_prev.setProperty("class", "btn-outline btn-sm")
             btn_prev.setToolTip("Gerar e abrir prévia do cartão-resposta em formato PDF")
             btn_prev.clicked.connect(lambda chk, tmpl=t: self._preview_template_pdf(tmpl))
 
             # Action Button 2: Edit Template
             btn_edit = QPushButton(" Editar")
             btn_edit.setIcon(get_icon("edit", color="white"))
-            btn_edit.setProperty("class", "btn-secondary")
+            btn_edit.setProperty("class", "btn-secondary btn-sm")
             btn_edit.setToolTip("Editar nome, questões, colunas ou visual deste modelo")
             btn_edit.clicked.connect(lambda chk, tmpl=t: self._open_template_dialog(tmpl))
 
             # Action Button 3: Delete Template
             btn_del = QPushButton(" Excluir")
             btn_del.setIcon(get_icon("delete", color="white"))
-            btn_del.setProperty("class", "btn-danger")
+            btn_del.setProperty("class", "btn-danger btn-sm")
             btn_del.setToolTip("Excluir permanentemente este modelo de cartão")
             btn_del.clicked.connect(lambda chk, tmpl=t: self._delete_template(tmpl))
 
