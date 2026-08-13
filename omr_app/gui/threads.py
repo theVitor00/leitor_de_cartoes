@@ -1,5 +1,6 @@
 """
 PySide6 QThread Workers for non-blocking background processing.
+Supports dynamic Template settings and custom OMR sensitivity.
 """
 
 import os
@@ -7,7 +8,7 @@ from PySide6.QtCore import QThread, Signal
 from omr_app.core.omr_engine import OMREngine
 from omr_app.core.pdf_generator import OMRPDFGenerator
 from omr_app.utils.image_helpers import load_file_to_cv2_images
-from omr_app.database.models import Prova, Resultado, Aluno, ProvaAluno
+from omr_app.database.models import Prova, Resultado, Aluno, ProvaAluno, Template
 from omr_app.logs.process_logger import ProcessLogger
 
 
@@ -20,17 +21,17 @@ class CorrectionWorker(QThread):
     finished = Signal(dict)                  # batch summary dict
     log_emitted = Signal(str)                # real-time text message for log console
 
-    def __init__(self, file_paths: list[str], target_prova_id: int = None):
+    def __init__(self, file_paths: list[str], target_prova_id: int = None, sensitivity_pct: float = 45.0):
         super().__init__()
         self.file_paths = file_paths
         self.target_prova_id = target_prova_id
+        self.sensitivity_pct = sensitivity_pct
         self.engine = OMREngine()
         self.logger = ProcessLogger()
 
     def run(self):
-        self.log_emitted.emit("🚀 Iniciando varredura de lote de arquivos...")
+        self.log_emitted.emit(f"🚀 Iniciando varredura em lote com Sensibilidade OMR em {self.sensitivity_pct:.0f}%...")
 
-        # 1. Expand files (converting multi-page PDFs to images)
         images_to_process = []
         for fp in self.file_paths:
             try:
@@ -48,11 +49,15 @@ class CorrectionWorker(QThread):
 
         self.log_emitted.emit(f"📊 Total de páginas/folhas a processar: {total_sheets}")
 
-        # Fetch Prova info if specified
         prova = Prova.get_or_none(Prova.id == self.target_prova_id) if self.target_prova_id else None
         gabarito = prova.get_gabarito() if prova else {}
         valor_total = prova.valor_total if prova else 10.0
-        num_questions = len(gabarito) if gabarito else 10
+
+        # Template settings
+        tmpl = prova.template if (prova and prova.template) else None
+        num_questions = tmpl.quantidade_questoes if tmpl else (len(gabarito) if gabarito else 10)
+        num_options = tmpl.alternativas_por_questao if tmpl else 5
+        colunas = tmpl.colunas if tmpl else 2
 
         sucessos = 0
         revisoes = 0
@@ -68,20 +73,20 @@ class CorrectionWorker(QThread):
                 expected_prova_id=self.target_prova_id,
                 gabarito_dict=gabarito,
                 valor_total=valor_total,
-                num_questions=num_questions
+                num_questions=num_questions,
+                num_options=num_options,
+                colunas=colunas,
+                sensitivity_pct=self.sensitivity_pct
             )
 
-            # Retrieve or create database record
             p_id = res['prova_id'] or self.target_prova_id
             a_id = res['aluno_id']
 
-            # Save result in database if prova & aluno are identified
             if p_id and a_id:
                 prova_obj = Prova.get_or_none(Prova.id == p_id)
                 aluno_obj = Aluno.get_or_none(Aluno.id == a_id)
 
                 if prova_obj and aluno_obj:
-                    # Save or update Resultado
                     resultado_record, _ = Resultado.get_or_create(
                         prova=prova_obj,
                         aluno=aluno_obj,
@@ -118,7 +123,6 @@ class CorrectionWorker(QThread):
             detalhes_lote.append(res)
             self.sheet_processed.emit(res)
 
-        # Save run log into database LogLeitura
         self.logger.record_run_log(
             prova_id=self.target_prova_id,
             total=total_sheets,
@@ -143,7 +147,7 @@ class CorrectionWorker(QThread):
 
 class PDFGeneratorWorker(QThread):
     """
-    Background worker thread for bulk generating PDF Answer Sheets.
+    Background worker thread for bulk generating PDF Answer Sheets based on Exam Template settings.
     """
     progress_changed = Signal(int, int)
     finished = Signal(str)
@@ -162,10 +166,16 @@ class PDFGeneratorWorker(QThread):
             self.finished.emit("")
             return
 
+        tmpl = prova.template
+        num_questions = tmpl.quantidade_questoes if tmpl else 10
+        num_options = tmpl.alternativas_por_questao if tmpl else 5
+        colunas = tmpl.colunas if tmpl else 2
+        exibir_assinatura = tmpl.exibir_assinatura if tmpl else True
+        cor_cabecalho_hex = tmpl.cor_cabecalho_hex if tmpl else "#00AEA7"
+        caminho_logo = tmpl.caminho_logo if tmpl else None
+
         alunos = Aluno.select().where(Aluno.id.in_(self.aluno_ids))
         total = len(alunos)
-        gabarito = prova.get_gabarito()
-        num_questions = len(gabarito) if gabarito else 10
 
         filename = f"Cartoes_Resposta_{prova.titulo.replace(' ', '_')}_{prova.id}.pdf"
         final_pdf_path = os.path.join(self.output_dir, filename)
@@ -176,26 +186,36 @@ class PDFGeneratorWorker(QThread):
 
         generator = OMRPDFGenerator(final_pdf_path)
 
-        self.log_emitted.emit(f"🖨️ Gerando cartões de resposta para {total} alunos...")
+        self.log_emitted.emit(f"🖨️ Gerando cartões de resposta (Template: {tmpl.nome if tmpl else 'Padrão'}) para {total} alunos...")
 
         for idx, aluno in enumerate(alunos, 1):
             self.progress_changed.emit(idx, total)
             self.log_emitted.emit(f"  📄 Desenhando cartão do aluno: {aluno.nome} ({aluno.matricula})")
 
-            # Draw page
+            header_color = OMRPDFGenerator(final_pdf_path)
+            from reportlab.lib import colors
+            color_obj = colors.HexColor(cor_cabecalho_hex) if cor_cabecalho_hex else colors.HexColor("#00AEA7")
+
             generator._draw_crop_marks(c_master)
             generator._draw_header(
                 c_master,
                 prova.titulo,
                 prova.materia.nome if prova.materia else "Geral",
                 prova.turma.nome if prova.turma else "Geral",
-                prova.data_aplicacao.strftime("%d/%m/%Y")
+                prova.data_aplicacao.strftime("%d/%m/%Y"),
+                color_obj,
+                caminho_logo
             )
             generator._draw_student_info_and_qr(
                 c_master, prova.id, aluno.id, aluno.nome, aluno.matricula
             )
-            generator._draw_instructions_and_signature(c_master)
-            generator._draw_omr_bubble_grid(c_master, num_questions=num_questions, num_options=5)
+            generator._draw_instructions_and_signature(c_master, exibir_assinatura)
+            generator._draw_omr_bubble_grid(
+                c_master,
+                num_questions=num_questions,
+                num_options=num_options,
+                colunas=colunas
+            )
 
             c_master.showPage()
 

@@ -1,7 +1,7 @@
 """
 Core OMR OpenCV Engine for Perspective Calibration, QR Code Reading,
-Bubble Density Measurement, and Automatic Grading.
-Enforces the Golden Rule: NEVER auto-discard a sheet, flag for audit queue instead.
+Dynamic Bubble Sampling (1-3 cols, 3-5 options), Custom Sensitivity Slider,
+and Automatic Grading with Bounding Box Coordinates for Audit.
 """
 
 import os
@@ -35,11 +35,13 @@ class OMREngine:
         gabarito_dict: dict = None,
         valor_total: float = 10.0,
         num_questions: int = 10,
-        num_options: int = 5
+        num_options: int = 5,
+        colunas: int = 2,
+        sensitivity_pct: float = 45.0
     ) -> dict:
         """
         Processes a single scanned sheet image.
-        Returns a dict with extracted info, answers, score, status, and annotated image path.
+        Returns a dict with extracted info, answers, score, status, annotated image path, and question bounding boxes.
         """
         if image_bgr is None or image_bgr.size == 0:
             return {
@@ -50,6 +52,7 @@ class OMREngine:
                 "acertos": 0,
                 "total_questoes": num_questions,
                 "respostas": {},
+                "flagged_boxes": [],
                 "annotated_path": None,
                 "mensagem": "Imagem inválida ou vazia."
             }
@@ -59,25 +62,30 @@ class OMREngine:
         if not warp_success:
             warped_bgr = cv2.resize(image_bgr, (WARP_WIDTH, WARP_HEIGHT))
 
-        # 2. QR Code Decoding
+        # 2. QR Code Decoding & SHA256 Hash Verification
         qr_valid, prova_id_qr, aluno_id_qr = self._read_qr_code(warped_bgr)
 
         prova_id = prova_id_qr if qr_valid else expected_prova_id
         aluno_id = aluno_id_qr if qr_valid else None
 
-        # 3. Read OMR Bubble Grid
+        # 3. Read OMR Bubble Grid with Custom Sensitivity
         respostas_marcadas, debug_bubbles = self._read_bubble_grid(
-            warped_bgr, num_questions=num_questions, num_options=num_options
+            warped_bgr,
+            num_questions=num_questions,
+            num_options=num_options,
+            colunas=colunas,
+            sensitivity_pct=sensitivity_pct
         )
 
         # 4. Automatic Grading & Rule Evaluation
         acertos = 0
         status = "OK"
         detalhes_status = []
+        flagged_boxes = []  # list of dicts with question bounding box coords for audit UI
 
         if not qr_valid:
             status = "REVISAO_NECESSARIA"
-            detalhes_status.append("QR Code não identificado ou hash inválido.")
+            detalhes_status.append("QR Code não identificado ou hash de segurança inválido (clonagem/adulteração).")
 
         if gabarito_dict:
             for q_str, resp_lid in respostas_marcadas.items():
@@ -87,22 +95,26 @@ class OMREngine:
                     status = "REVISAO_NECESSARIA"
                     detalhes_status.append(f"Questão {q_str}: Dupla marcação ({resp_lid}).")
                 elif resp_lid == "-":
-                    # Blank answer
-                    pass
+                    pass  # Blank answer
                 elif resp_lid == gab_resp:
                     acertos += 1
+
+                # Extract bounding box for flagged question
+                if "|" in resp_lid or not qr_valid:
+                    q_num = int(q_str)
+                    box = self._get_question_bounding_box(q_num, num_questions, num_options, colunas)
+                    flagged_boxes.append({"question": q_str, "box": box, "reason": resp_lid})
         else:
             status = "REVISAO_NECESSARIA"
             detalhes_status.append("Gabarito não fornecido.")
 
         nota_final = (acertos / num_questions) * valor_total if num_questions > 0 else 0.0
 
-        # 5. Draw Annotated Visual Overlay
+        # 5. Draw Visual Overlay
         annotated_bgr = self._annotate_image(
-            warped_bgr, respostas_marcadas, gabarito_dict, debug_bubbles, num_questions, num_options
+            warped_bgr, respostas_marcadas, gabarito_dict, debug_bubbles
         )
 
-        # Save annotated image for audit inspection
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         annotated_filename = f"scan_{prova_id}_{aluno_id}_{timestamp}.png"
         annotated_path = os.path.join(self.scans_dir, annotated_filename)
@@ -116,12 +128,12 @@ class OMREngine:
             "acertos": acertos,
             "total_questoes": num_questions,
             "respostas": respostas_marcadas,
+            "flagged_boxes": flagged_boxes,
             "annotated_path": annotated_path,
             "mensagem": " | ".join(detalhes_status) if detalhes_status else "Correção efetuada com sucesso."
         }
 
     def _warp_perspective(self, img: np.ndarray) -> tuple[np.ndarray, bool]:
-        """Detects 4 solid corner crop marks and Warps perspective to WARP_WIDTH x WARP_HEIGHT."""
         h, w = img.shape[:2]
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
@@ -151,7 +163,6 @@ class OMREngine:
                             candidates.append((cx, cy))
 
         if len(candidates) >= 4:
-            # Sort centroids into TL, TR, BR, BL
             candidates = sorted(candidates, key=lambda p: (p[1], p[0]))
             top_two = sorted(candidates[:2], key=lambda p: p[0])
             bottom_two = sorted(candidates[-2:], key=lambda p: p[0])
@@ -169,15 +180,12 @@ class OMREngine:
         return img, False
 
     def _read_qr_code(self, img: np.ndarray) -> tuple[bool, int, int]:
-        """Scans image for QR Code and validates security signature."""
         try:
-            # Crop top 35% region where QR code is placed
             h, w = img.shape[:2]
-            top_region = img[0:int(h * 0.35), int(w * 0.5):w]
+            top_region = img[0:int(h * 0.35), int(w * 0.45):w]
 
             decoded_text, _, _ = self.qr_detector.detectAndDecode(top_region)
             if not decoded_text:
-                # Try full image scan as fallback
                 decoded_text, _, _ = self.qr_detector.detectAndDecode(img)
 
             if decoded_text:
@@ -188,40 +196,55 @@ class OMREngine:
         return False, 0, 0
 
     def _read_bubble_grid(
-        self, img: np.ndarray, num_questions: int = 10, num_options: int = 5
+        self,
+        img: np.ndarray,
+        num_questions: int = 10,
+        num_options: int = 5,
+        colunas: int = 2,
+        sensitivity_pct: float = 45.0
     ) -> tuple[dict, list]:
-        """Calculates darkness pixel ratios for question options A..E."""
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        # Binarize with Otsu
         _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
-        cols = 2 if num_questions > 15 else 1
+        cols = max(1, min(3, colunas))
         q_per_col = (num_questions + cols - 1) // cols
-
         options_letters = ["A", "B", "C", "D", "E"][:num_options]
-        respostas = {}
-        debug_bubbles = []  # list of dicts with center coordinates and fill ratios
 
-        # Relative coordinates mapping on 1000 x 1414 warped canvas
+        threshold_ratio = sensitivity_pct / 100.0
+
+        respostas = {}
+        debug_bubbles = []
+
         grid_top_y = 525
-        grid_height = 800
+        grid_height = 780
         row_step = grid_height / max(q_per_col, 1)
 
+        # Horizontal positioning based on 1, 2, or 3 columns
         for q in range(1, num_questions + 1):
-            col_idx = 0 if q <= q_per_col else 1
+            col_idx = (q - 1) // q_per_col
             q_in_col = (q - 1) % q_per_col
 
-            col_x_start = 120 if col_idx == 0 else 580
+            if cols == 3:
+                col_x_start = 110 + (col_idx * 280)
+                opt_spacing = 38
+                r = 10
+            elif cols == 2:
+                col_x_start = 120 + (col_idx * 450)
+                opt_spacing = 52
+                r = 12
+            else:
+                col_x_start = 180
+                opt_spacing = 70
+                r = 14
+
             row_y = grid_top_y + int(q_in_col * row_step)
 
             option_fills = []
 
             for opt_idx, letter in enumerate(options_letters):
-                cx = col_x_start + 110 + (opt_idx * 55)
+                cx = col_x_start + 90 + (opt_idx * opt_spacing)
                 cy = row_y
 
-                # Extract circular ROI around (cx, cy) with radius 12
-                r = 12
                 y1, y2 = max(0, cy - r), min(WARP_HEIGHT, cy + r)
                 x1, x2 = max(0, cx - r), min(WARP_WIDTH, cx + r)
 
@@ -232,8 +255,8 @@ class OMREngine:
 
                 option_fills.append((letter, ratio, cx, cy))
 
-            # Threshold for marked bubble (e.g. >= 35% darkness fill)
-            marked_opts = [opt for opt, r, cx, cy in option_fills if r >= 0.35]
+            # Apply sensitivity threshold
+            marked_opts = [opt for opt, fill_ratio, cx, cy in option_fills if fill_ratio >= threshold_ratio]
 
             if len(marked_opts) == 1:
                 respostas[str(q)] = marked_opts[0]
@@ -246,16 +269,46 @@ class OMREngine:
 
         return respostas, debug_bubbles
 
+    def _get_question_bounding_box(
+        self, q_num: int, num_questions: int, num_options: int, colunas: int
+    ) -> list[int]:
+        """Calculates exact bounding box [x, y, w, h] for a given question row."""
+        cols = max(1, min(3, colunas))
+        q_per_col = (num_questions + cols - 1) // cols
+
+        col_idx = (q_num - 1) // q_per_col
+        q_in_col = (q_num - 1) % q_per_col
+
+        grid_top_y = 525
+        grid_height = 780
+        row_step = grid_height / max(q_per_col, 1)
+
+        row_y = grid_top_y + int(q_in_col * row_step)
+
+        if cols == 3:
+            col_x_start = 110 + (col_idx * 280)
+            box_w = 260
+        elif cols == 2:
+            col_x_start = 120 + (col_idx * 450)
+            box_w = 400
+        else:
+            col_x_start = 180
+            box_w = 550
+
+        x = col_x_start - 20
+        y = row_y - 15
+        w = box_w
+        h = max(24, int(row_step))
+
+        return [x, y, w, h]
+
     def _annotate_image(
         self,
         img: np.ndarray,
         respostas: dict,
         gabarito: dict,
-        debug_bubbles: list,
-        num_questions: int,
-        num_options: int
+        debug_bubbles: list
     ) -> np.ndarray:
-        """Draws visual green/yellow/red indicators over bubbles for audit queue inspection."""
         annotated = img.copy()
 
         for q_str, option_fills in debug_bubbles:
@@ -263,20 +316,20 @@ class OMREngine:
             marked_ans = respostas.get(q_str, "-")
 
             for letter, ratio, cx, cy in option_fills:
-                color = (200, 200, 200)  # Default light gray
+                color = (200, 200, 200)
                 thickness = 1
 
                 if letter in marked_ans.split("|"):
                     if "|" in marked_ans:
-                        color = (0, 215, 255)  # Yellow/Amber for double mark
+                        color = (0, 215, 255)  # Yellow for double mark
                         thickness = 3
                     elif gab_ans and letter == gab_ans:
                         color = (0, 200, 0)    # Green for correct
                         thickness = 3
                     elif gab_ans and letter != gab_ans:
-                        color = (0, 0, 255)    # Red for incorrect
+                        color = (0, 0, 255)    # Red for wrong choice
                         thickness = 3
 
-                cv2.circle(annotated, (cx, cy), 14, color, thickness)
+                cv2.circle(annotated, (cx, cy), 13, color, thickness)
 
         return annotated

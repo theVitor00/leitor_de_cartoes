@@ -1,13 +1,13 @@
 """
 Database models for OMR Application using Peewee ORM (SQLite).
-Defines all 7 required entities and their relationships.
+Defines all entities including dynamic Templates.
 """
 
 from datetime import datetime
 import json
 from peewee import (
     SqliteDatabase, Model, AutoField, CharField, IntegerField,
-    FloatField, DateField, DateTimeField, ForeignKeyField, TextField, CompositeKey
+    FloatField, DateField, DateTimeField, ForeignKeyField, TextField, BooleanField
 )
 
 # SQLite database deferred initialization
@@ -47,11 +47,27 @@ class Aluno(BaseModel):
         table_name = 'alunos'
 
 
+class Template(BaseModel):
+    id = AutoField()
+    nome = CharField(max_length=150)
+    quantidade_questoes = IntegerField(default=10)        # 1 to 100
+    alternativas_por_questao = IntegerField(default=5)   # 3, 4, 5 (A-C, A-D, A-E)
+    colunas = IntegerField(default=2)                    # 1, 2, 3
+    exibir_assinatura = BooleanField(default=True)
+    cor_cabecalho_hex = CharField(max_length=10, default='#00AEA7')
+    caminho_logo = CharField(max_length=255, null=True)
+    data_criacao = DateTimeField(default=datetime.now)
+
+    class Meta:
+        table_name = 'templates'
+
+
 class Prova(BaseModel):
     id = AutoField()
     titulo = CharField(max_length=150)
     materia = ForeignKeyField(Materia, backref='provas', on_delete='CASCADE')
     turma = ForeignKeyField(Turma, backref='provas', on_delete='CASCADE')
+    template = ForeignKeyField(Template, backref='provas', null=True, on_delete='SET NULL')
     gabarito_oficial_json = TextField(default='{}')  # e.g., {"1": "A", "2": "C", ...}
     valor_total = FloatField(default=10.0)
     data_aplicacao = DateField(default=datetime.now)

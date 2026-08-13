@@ -1,20 +1,21 @@
 """
 Batch Correction Execution View with Real-time Counters, Progress Bar,
-and Live Log Console.
+Dynamic OMR Sensitivity QSlider, and Live Log Console.
 """
 
 import os
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox,
-    QFileDialog, QProgressBar, QTextEdit, QFrame, QGridLayout, QMessageBox
+    QFileDialog, QProgressBar, QTextEdit, QFrame, QGridLayout, QMessageBox,
+    QSlider
 )
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from omr_app.database.models import Prova, Resultado
 from omr_app.gui.threads import CorrectionWorker
 
 
 class CorrectionView(QWidget):
-    batch_completed = Signal()  # Signal to refresh other views
+    batch_completed = Signal()
 
     def __init__(self):
         super().__init__()
@@ -37,7 +38,7 @@ class CorrectionView(QWidget):
         top_box.setProperty("class", "card-frame")
         top_layout = QHBoxLayout(top_box)
 
-        lbl_p = QLabel("Prova Alvo (opcional if QR code auto-detect):")
+        lbl_p = QLabel("Prova Alvo (opcional se auto-detect via QR Code):")
         lbl_p.setStyleSheet("font-weight: bold;")
         top_layout.addWidget(lbl_p)
 
@@ -61,7 +62,33 @@ class CorrectionView(QWidget):
         self.lbl_selected_info.setStyleSheet("color: #94A3B8; font-style: italic;")
         layout.addWidget(self.lbl_selected_info)
 
-        # REAL-TIME COUNTERS GRID (4 KPI Cards)
+        # OMR SENSITIVITY QSLIDER CONTROL BOX
+        sens_box = QFrame()
+        sens_box.setProperty("class", "card-frame")
+        sens_layout = QHBoxLayout(sens_box)
+
+        self.lbl_sens_title = QLabel("🎚️ Sensibilidade OMR (Threshold de Preenchimento): 45%")
+        self.lbl_sens_title.setStyleSheet("font-weight: bold; color: #00AEA7;")
+        sens_layout.addWidget(self.lbl_sens_title)
+
+        self.slider_sens = QSlider(Qt.Horizontal)
+        self.slider_sens.setRange(10, 90)
+        self.slider_sens.setValue(45)
+        self.slider_sens.setTickInterval(5)
+        self.slider_sens.setTickPosition(QSlider.TicksBelow)
+        self.slider_sens.valueChanged.connect(self._on_sens_changed)
+        sens_layout.addWidget(self.slider_sens, stretch=1)
+
+        lbl_low = QLabel("10% (Mais Sensível)")
+        lbl_low.setStyleSheet("font-size: 11px; color: #94A3B8;")
+        lbl_high = QLabel("90% (Mais Rigoroso)")
+        lbl_high.setStyleSheet("font-size: 11px; color: #94A3B8;")
+        sens_layout.addWidget(lbl_low)
+        sens_layout.addWidget(lbl_high)
+
+        layout.addWidget(sens_box)
+
+        # REAL-TIME COUNTERS GRID (5 KPI Cards)
         counters_grid = QGridLayout()
         counters_grid.setSpacing(12)
 
@@ -87,7 +114,7 @@ class CorrectionView(QWidget):
 
         # Live Log Console
         lbl_console = QLabel("Console de Execução ao Vivo:")
-        lbl_console.setStyleSheet("font-weight: bold; margin-top: 10px;")
+        lbl_console.setStyleSheet("font-weight: bold; margin-top: 5px;")
         layout.addWidget(lbl_console)
 
         self.txt_console = QTextEdit()
@@ -100,6 +127,9 @@ class CorrectionView(QWidget):
         self.load_provas_combo()
         self.refresh_historical_counters()
 
+    def _on_sens_changed(self, val: int):
+        self.lbl_sens_title.setText(f"🎚️ Sensibilidade OMR (Threshold de Preenchimento): {val}%")
+
     def load_provas_combo(self):
         self.combo_provas.clear()
         self.combo_provas.addItem("Auto-detectar pelo QR Code de cada folha", None)
@@ -107,7 +137,6 @@ class CorrectionView(QWidget):
             self.combo_provas.addItem(f"#{p.id} - {p.titulo}", p.id)
 
     def refresh_historical_counters(self):
-        """Updates total historical counters from database."""
         try:
             total_hist = Resultado.select().count()
             self.card_historico["val_lbl"].setText(str(total_hist))
@@ -119,14 +148,14 @@ class CorrectionView(QWidget):
         frame.setProperty("class", "kpi-card")
 
         vbox = QVBoxLayout(frame)
-        vbox.setContentsMargins(12, 12, 12, 12)
+        vbox.setContentsMargins(10, 10, 10, 10)
 
         lbl_t = QLabel(title)
         lbl_t.setProperty("class", "kpi-title")
 
         lbl_v = QLabel(val)
         lbl_v.setProperty("class", "kpi-value")
-        lbl_v.setStyleSheet(f"color: {color_hex}; font-size: 22px;")
+        lbl_v.setStyleSheet(f"color: {color_hex}; font-size: 20px;")
 
         vbox.addWidget(lbl_t)
         vbox.addWidget(lbl_v)
@@ -158,8 +187,8 @@ class CorrectionView(QWidget):
         self.progress_bar.setValue(0)
 
         target_p_id = self.combo_provas.currentData()
+        sens_pct = float(self.slider_sens.value())
 
-        # Reset current batch metrics cards
         self.card_lote["val_lbl"].setText(f"0 de {len(self.selected_files)}")
         self.card_sucesso["val_lbl"].setText("0")
         self.card_revisao["val_lbl"].setText("0")
@@ -169,7 +198,9 @@ class CorrectionView(QWidget):
         self.lote_revisoes = 0
         self.lote_erros = 0
 
-        self.worker = CorrectionWorker(self.selected_files, target_prova_id=target_p_id)
+        self.worker = CorrectionWorker(
+            self.selected_files, target_prova_id=target_p_id, sensitivity_pct=sens_pct
+        )
         self.worker.progress_changed.connect(self._on_progress)
         self.worker.sheet_processed.connect(self._on_sheet_processed)
         self.worker.log_emitted.connect(self.txt_console.append)

@@ -1,7 +1,6 @@
 """
-Manual Audit Queue (Fila de Auditoria) with Split View.
-Displays cropped scan image with OpenCV overlays on left panel,
-and interactive decision form on right panel.
+Manual Audit Queue View with Interactive QGraphicsView (Zoom/Pan)
+and Bounding Box Highlight Overlays for flagged questions.
 """
 
 import os
@@ -10,13 +9,33 @@ import json
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSplitter,
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame, QFormLayout,
-    QComboBox, QLineEdit, QMessageBox, QScrollArea, QGraphicsView,
-    QGraphicsScene, QGraphicsPixmapItem
+    QComboBox, QLineEdit, QMessageBox, QGraphicsView, QGraphicsScene,
+    QGraphicsPixmapItem, QGraphicsRectItem
 )
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import Qt, QRectF
+from PySide6.QtGui import QPixmap, QPen, QColor, QBrush, QWheelEvent
 from omr_app.database.models import Resultado, Aluno, Prova
-from omr_app.utils.image_helpers import cv2_to_qpixmap
+from omr_app.core.omr_engine import OMREngine
+
+
+class ZoomableGraphicsView(QGraphicsView):
+    """
+    QGraphicsView with interactive Zoom (mouse wheel) and Pan (drag with left mouse button).
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setDragMode(QGraphicsView.ScrollHandDrag)
+        self.setRenderHint(QGraphicsView.SmoothPixmapTransform)
+        self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
+        self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setStyleSheet("background-color: #0F172A; border: 1px solid #334155; border-radius: 8px;")
+
+    def wheelEvent(self, event: QWheelEvent):
+        zoom_factor = 1.15 if event.angleDelta().y() > 0 else 1.0 / 1.15
+        self.scale(zoom_factor, zoom_factor)
 
 
 class AuditView(QWidget):
@@ -31,7 +50,6 @@ class AuditView(QWidget):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
 
-        # Header Title
         top_layout = QHBoxLayout()
         lbl_title = QLabel("Fila de Auditoria Manual (Revisão de Falhas & Rasuras)")
         lbl_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #F59E0B;")
@@ -45,10 +63,9 @@ class AuditView(QWidget):
 
         layout.addLayout(top_layout)
 
-        # Splitter Layout (Main Splitter)
         splitter = QSplitter(Qt.Horizontal)
 
-        # Left Panel: Table of Pending Scans & Image Viewer
+        # LEFT PANEL: Table of Pending Scans & Interactive Image Viewer
         left_widget = QWidget()
         left_layout = QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 0, 0)
@@ -64,23 +81,38 @@ class AuditView(QWidget):
         self.table_pending.itemSelectionChanged.connect(self._on_item_selected)
         left_layout.addWidget(self.table_pending, stretch=1)
 
-        # Image Viewer Frame
-        lbl_img_title = QLabel("Visualização da Folha Escaneada (OpenCV Overlays):")
-        lbl_img_title.setStyleSheet("font-weight: bold; margin-top: 10px;")
-        left_layout.addWidget(lbl_img_title)
+        # Image Toolbar (Zoom In, Zoom Out, Reset)
+        zoom_bar = QHBoxLayout()
+        lbl_img_title = QLabel("Visualização com Zoom/Pan & Destaques OMR:")
+        lbl_img_title.setStyleSheet("font-weight: bold;")
+        zoom_bar.addWidget(lbl_img_title)
+        zoom_bar.addStretch()
 
-        self.image_label = QLabel("Selecione um item da fila para visualizar a imagem.")
-        self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setStyleSheet("background-color: #0F172A; border: 1px solid #334155; border-radius: 8px;")
+        btn_zoom_in = QPushButton("🔍 Zoom In (+)")
+        btn_zoom_in.setProperty("class", "btn-outline")
+        btn_zoom_in.clicked.connect(lambda: self.graphics_view.scale(1.2, 1.2))
 
-        scroll_img = QScrollArea()
-        scroll_img.setWidgetResizable(True)
-        scroll_img.setWidget(self.image_label)
-        left_layout.addWidget(scroll_img, stretch=2)
+        btn_zoom_out = QPushButton("🔍 Zoom Out (-)")
+        btn_zoom_out.setProperty("class", "btn-outline")
+        btn_zoom_out.clicked.connect(lambda: self.graphics_view.scale(1 / 1.2, 1 / 1.2))
+
+        btn_reset_zoom = QPushButton("↺ Reset")
+        btn_reset_zoom.setProperty("class", "btn-outline")
+        btn_reset_zoom.clicked.connect(self._reset_zoom)
+
+        zoom_bar.addWidget(btn_zoom_in)
+        zoom_bar.addWidget(btn_zoom_out)
+        zoom_bar.addWidget(btn_reset_zoom)
+        left_layout.addLayout(zoom_bar)
+
+        # QGraphicsView Scene
+        self.scene = QGraphicsScene(self)
+        self.graphics_view = ZoomableGraphicsView(self.scene)
+        left_layout.addWidget(self.graphics_view, stretch=3)
 
         splitter.addWidget(left_widget)
 
-        # Right Panel: Interactive Operator Form
+        # RIGHT PANEL: Interactive Decision Form
         right_frame = QFrame()
         right_frame.setProperty("class", "card-frame")
         right_layout = QVBoxLayout(right_frame)
@@ -110,7 +142,6 @@ class AuditView(QWidget):
 
         right_layout.addLayout(form_layout)
 
-        # Decision Action Buttons
         btn_layout = QVBoxLayout()
         btn_layout.setSpacing(10)
 
@@ -128,11 +159,14 @@ class AuditView(QWidget):
         right_layout.addStretch()
 
         splitter.addWidget(right_frame)
-        splitter.setSizes([600, 400])
+        splitter.setSizes([650, 350])
 
         layout.addWidget(splitter)
 
         self.load_pending_items()
+
+    def _reset_zoom(self):
+        self.graphics_view.resetTransform()
 
     def load_pending_items(self):
         query = Resultado.select().where(Resultado.status != "OK")
@@ -150,7 +184,6 @@ class AuditView(QWidget):
             st_item.setForeground(Qt.yellow if r.status == "REVISAO_NECESSARIA" else Qt.red)
             self.table_pending.setItem(row, 3, st_item)
 
-        # Load Aluno & Prova combo options
         self.combo_aluno.clear()
         for a in Aluno.select():
             self.combo_aluno.addItem(f"{a.nome} ({a.matricula})", a.id)
@@ -171,7 +204,6 @@ class AuditView(QWidget):
 
         self.current_resultado = r
 
-        # Set values on form
         if r.aluno:
             idx = self.combo_aluno.findData(r.aluno.id)
             if idx >= 0:
@@ -186,13 +218,43 @@ class AuditView(QWidget):
         self.txt_acertos.setText(str(r.acertos))
         self.txt_respostas_json.setText(r.respostas_marcadas_json)
 
-        # Display image scan with OpenCV overlay
+        # Clear and load scene
+        self.scene.clear()
+
         if r.caminho_imagem_scan and os.path.exists(r.caminho_imagem_scan):
             pixmap = QPixmap(r.caminho_imagem_scan)
-            scaled = pixmap.scaled(550, 750, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            self.image_label.setPixmap(scaled)
-        else:
-            self.image_label.setText("Imagem de scan não localizada no disco.")
+            pixmap_item = QGraphicsPixmapItem(pixmap)
+            self.scene.addItem(pixmap_item)
+            self.scene.setSceneRect(QRectF(pixmap.rect()))
+
+            # Check answers for double marks / flagged questions and draw highlighted boxes
+            respostas = r.get_respostas()
+            prova = r.prova
+            tmpl = prova.template if (prova and prova.template) else None
+            num_q = tmpl.quantidade_questoes if tmpl else r.total_questoes
+            num_opts = tmpl.alternativas_por_questao if tmpl else 5
+            colunas = tmpl.colunas if tmpl else 2
+
+            engine = OMREngine()
+
+            for q_str, ans in respostas.items():
+                if "|" in ans or ans == "-":
+                    # Highlight question with yellow/red bounding rectangle overlay
+                    q_num = int(q_str)
+                    box = engine._get_question_bounding_box(q_num, num_q, num_opts, colunas)
+                    x, y, w, h = box
+
+                    rect_item = QGraphicsRectItem(x, y, w, h)
+                    pen = QPen(QColor("#F59E0B" if "|" in ans else "#EF4444"))
+                    pen.setWidth(3)
+                    rect_item.setPen(pen)
+
+                    brush = QBrush(QColor(245, 158, 11, 40) if "|" in ans else QColor(239, 68, 68, 40))
+                    rect_item.setBrush(brush)
+
+                    self.scene.addItem(rect_item)
+
+            self.graphics_view.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
 
     def _confirm_override(self):
         if not self.current_resultado:
@@ -211,13 +273,12 @@ class AuditView(QWidget):
             self.current_resultado.nota_final = nota
             self.current_resultado.acertos = acertos
             self.current_resultado.respostas_marcadas_json = resp_json
-            self.current_resultado.status = "OK"  # Flag as resolved
+            self.current_resultado.status = "OK"
             self.current_resultado.save()
 
             QMessageBox.information(self, "Sucesso", "Revisão confirmada com sucesso!")
             self.load_pending_items()
-            self.image_label.clear()
-            self.image_label.setText("Selecione um item da fila.")
+            self.scene.clear()
             self.current_resultado = None
         except Exception as e:
             QMessageBox.critical(self, "Erro", f"Erro ao salvar alteração: {e}")
@@ -240,6 +301,5 @@ class AuditView(QWidget):
 
             QMessageBox.information(self, "Anulada", "Prova anulada com sucesso.")
             self.load_pending_items()
-            self.image_label.clear()
-            self.image_label.setText("Selecione um item da fila.")
+            self.scene.clear()
             self.current_resultado = None

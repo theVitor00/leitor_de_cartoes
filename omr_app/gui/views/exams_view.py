@@ -1,5 +1,6 @@
 """
 Exams & Subjects View (CRUD for Materias, Provas and Interactive Answer Key Editor).
+Integrates Template selection for dynamic Gabarito matrix.
 """
 
 import json
@@ -10,7 +11,7 @@ from PySide6.QtWidgets import (
     QGridLayout, QScrollArea
 )
 from PySide6.QtCore import QDate
-from omr_app.database.models import Materia, Turma, Prova, ProvaAluno, Aluno
+from omr_app.database.models import Materia, Turma, Prova, ProvaAluno, Aluno, Template
 
 
 class ExamsView(QWidget):
@@ -24,7 +25,6 @@ class ExamsView(QWidget):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
 
-        # Header Title Bar
         top_layout = QHBoxLayout()
         lbl_title = QLabel("Disciplinas e Provas Cadastradas")
         lbl_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #00AEA7;")
@@ -43,11 +43,10 @@ class ExamsView(QWidget):
 
         layout.addLayout(top_layout)
 
-        # Table of Exams
         self.table_provas = QTableWidget()
-        self.table_provas.setColumnCount(6)
+        self.table_provas.setColumnCount(7)
         self.table_provas.setHorizontalHeaderLabels([
-            "ID", "Título da Prova", "Disciplina", "Turma", "Valor Total", "Data Aplicação"
+            "ID", "Título da Prova", "Disciplina", "Turma", "Modelo / Template", "Valor Total", "Data Aplicação"
         ])
         self.table_provas.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         layout.addWidget(self.table_provas)
@@ -60,13 +59,16 @@ class ExamsView(QWidget):
             row = self.table_provas.rowCount()
             self.table_provas.insertRow(row)
 
+            tmpl_nome = p.template.nome if p.template else "Padrão"
+
             self.table_provas.setItem(row, 0, QTableWidgetItem(str(p.id)))
             self.table_provas.setItem(row, 1, QTableWidgetItem(p.titulo))
             self.table_provas.setItem(row, 2, QTableWidgetItem(p.materia.nome if p.materia else "N/A"))
             self.table_provas.setItem(row, 3, QTableWidgetItem(p.turma.nome if p.turma else "N/A"))
-            self.table_provas.setItem(row, 4, QTableWidgetItem(f"{p.valor_total:.2f}"))
+            self.table_provas.setItem(row, 4, QTableWidgetItem(tmpl_nome))
+            self.table_provas.setItem(row, 5, QTableWidgetItem(f"{p.valor_total:.2f}"))
             dt_str = p.data_aplicacao.strftime("%d/%m/%Y") if p.data_aplicacao else ""
-            self.table_provas.setItem(row, 5, QTableWidgetItem(dt_str))
+            self.table_provas.setItem(row, 6, QTableWidgetItem(dt_str))
 
     def _open_add_materia_dialog(self):
         dialog = QDialog(self)
@@ -104,10 +106,14 @@ class ExamsView(QWidget):
             QMessageBox.warning(self, "Aviso", "Cadastre disciplinas e turmas antes de criar provas.")
             return
 
+        if Template.select().count() == 0:
+            QMessageBox.warning(self, "Aviso", "Cadastre pelo menos um Modelo de Cartão (Template) antes de criar provas.")
+            return
+
         dialog = QDialog(self)
         dialog.setWindowTitle("Criar Nova Prova e Configurar Gabarito")
-        dialog.setMinimumWidth(550)
-        dialog.setMinimumHeight(600)
+        dialog.setMinimumWidth(600)
+        dialog.setMinimumHeight(650)
 
         vbox = QVBoxLayout(dialog)
         form = QFormLayout()
@@ -123,6 +129,12 @@ class ExamsView(QWidget):
         for t in Turma.select():
             combo_turma.addItem(t.nome, t.id)
 
+        combo_template = QComboBox()
+        for tmpl in Template.select():
+            combo_template.addItem(
+                f"{tmpl.nome} ({tmpl.quantidade_questoes}Q - {tmpl.alternativas_por_questao} Alt)", tmpl.id
+            )
+
         spn_valor = QDoubleSpinBox()
         spn_valor.setRange(1.0, 100.0)
         spn_valor.setValue(10.0)
@@ -130,21 +142,17 @@ class ExamsView(QWidget):
         dt_edit = QDateEdit(QDate.currentDate())
         dt_edit.setCalendarPopup(True)
 
-        spn_num_q = QSpinBox()
-        spn_num_q.setRange(1, 100)
-        spn_num_q.setValue(10)
-
         form.addRow("Título da Prova:", txt_titulo)
         form.addRow("Disciplina:", combo_mat)
         form.addRow("Turma Target:", combo_turma)
+        form.addRow("Modelo de Cartão (Template):", combo_template)
         form.addRow("Valor Total da Nota:", spn_valor)
         form.addRow("Data Aplicação:", dt_edit)
-        form.addRow("Quantidade de Questões:", spn_num_q)
 
         vbox.addLayout(form)
 
         # Gabarito Matrix Header
-        lbl_gab = QLabel("Interactive Gabarito Editor (Selecione a resposta correta A-E):")
+        lbl_gab = QLabel("Editor do Gabarito Oficial (Selecione a resposta correta para cada questão):")
         lbl_gab.setStyleSheet("font-weight: bold; color: #00AEA7; margin-top: 10px;")
         vbox.addWidget(lbl_gab)
 
@@ -154,17 +162,24 @@ class ExamsView(QWidget):
         container_widget = QWidget()
         matrix_grid = QGridLayout(container_widget)
 
-        question_groups = {}  # {q_num: QButtonGroup}
+        question_groups = {}
 
         def build_gabarito_matrix():
-            # Clear previous grid
             for i in reversed(range(matrix_grid.count())):
                 w = matrix_grid.itemAt(i).widget()
                 if w:
                     w.setParent(None)
             question_groups.clear()
 
-            n_q = spn_num_q.value()
+            tmpl_id = combo_template.currentData()
+            tmpl = Template.get_or_none(Template.id == tmpl_id)
+            if not tmpl:
+                return
+
+            n_q = tmpl.quantidade_questoes
+            n_opts = tmpl.alternativas_por_questao
+            letters = ["A", "B", "C", "D", "E"][:n_opts]
+
             for q in range(1, n_q + 1):
                 lbl_q = QLabel(f"Q{q:02d}:")
                 lbl_q.setStyleSheet("font-weight: bold;")
@@ -173,14 +188,14 @@ class ExamsView(QWidget):
                 bg = QButtonGroup(dialog)
                 question_groups[q] = bg
 
-                for opt_idx, letter in enumerate(["A", "B", "C", "D", "E"]):
+                for opt_idx, letter in enumerate(letters):
                     rb = QRadioButton(letter)
                     if opt_idx == 0:
-                        rb.setChecked(True)  # default select A
+                        rb.setChecked(True)
                     bg.addButton(rb, opt_idx)
                     matrix_grid.addWidget(rb, q - 1, opt_idx + 1)
 
-        spn_num_q.valueChanged.connect(build_gabarito_matrix)
+        combo_template.currentIndexChanged.connect(build_gabarito_matrix)
         build_gabarito_matrix()
 
         scroll.setWidget(container_widget)
@@ -203,19 +218,20 @@ class ExamsView(QWidget):
 
             m_id = combo_mat.currentData()
             t_id = combo_turma.currentData()
+            tmpl_id = combo_template.currentData()
             dt_py = dt_edit.date().toPython()
 
             prova = Prova.create(
                 titulo=tit,
                 materia_id=m_id,
                 turma_id=t_id,
+                template_id=tmpl_id,
                 valor_total=spn_valor.value(),
                 data_aplicacao=dt_py
             )
             prova.set_gabarito(gabarito_dict)
             prova.save()
 
-            # Automatically populate ProvaAluno list for all students in target class
             alunos_class = Aluno.select().where(Aluno.turma_id == t_id)
             for al in alunos_class:
                 ProvaAluno.get_or_create(prova=prova, aluno=al)
