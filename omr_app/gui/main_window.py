@@ -1,0 +1,191 @@
+"""
+Main Window for the PySide6 OMR Desktop Application.
+Integrates Sidebar Navigation, Top Header with Theme Switcher, and View Stack.
+"""
+
+from PySide6.QtWidgets import (
+    QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLabel,
+    QStackedWidget, QFrame, QApplication
+)
+from PySide6.QtCore import Qt, QSize
+from PySide6.QtGui import QIcon
+
+from omr_app.gui.theme_manager import ThemeManager
+from omr_app.gui.views.dashboard_view import DashboardView
+from omr_app.gui.views.students_view import StudentsView
+from omr_app.gui.views.exams_view import ExamsView
+from omr_app.gui.views.generator_view import GeneratorView
+from omr_app.gui.views.correction_view import CorrectionView
+from omr_app.gui.views.audit_view import AuditView
+from omr_app.gui.views.reports_view import ReportsView
+
+
+class MainWindow(QMainWindow):
+
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Sistema de Gestão e Correção Automática de Cartões OMR")
+        self.resize(1280, 800)
+        self.setMinimumSize(1024, 680)
+
+        self._init_ui()
+
+    def _init_ui(self):
+        main_central = QWidget()
+        self.setCentralWidget(main_central)
+
+        main_layout = QHBoxLayout(main_central)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # 1. Sidebar Navigation Menu
+        sidebar = QFrame()
+        sidebar.setObjectName("SidebarWidget")
+        sidebar.setFixedWidth(240)
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(12, 16, 12, 16)
+        sidebar_layout.setSpacing(8)
+
+        # Sidebar Header Logo / Title
+        lbl_logo = QLabel("🎯 LEITOR OMR")
+        lbl_logo.setObjectName("SidebarTitle")
+        sidebar_layout.addWidget(lbl_logo)
+
+        lbl_sub = QLabel("  Gestão & Correção de Cartões")
+        lbl_sub.setObjectName("SidebarSubtitle")
+        sidebar_layout.addWidget(lbl_sub)
+        sidebar_layout.addSpacing(16)
+
+        # Navigation Buttons List
+        self.nav_buttons = []
+
+        nav_items = [
+            ("📊 Dashboard", 0),
+            ("👥 Alunos & Turmas", 1),
+            ("📚 Disciplinas & Provas", 2),
+            ("🖨️ Gerador de Cartões", 3),
+            ("▶ Executar Correção", 4),
+            ("🔍 Fila de Auditoria", 5),
+            ("📈 Relatórios & Logs", 6),
+        ]
+
+        for text, index in nav_items:
+            btn = QPushButton(text)
+            btn.setProperty("class", "nav-btn")
+            btn.setCheckable(True)
+            btn.clicked.connect(lambda checked, idx=index: self._switch_view(idx))
+            sidebar_layout.addWidget(btn)
+            self.nav_buttons.append(btn)
+
+        sidebar_layout.addStretch()
+
+        # Version Footer
+        lbl_ver = QLabel("v2.5.0 - PySide6 / OpenCV")
+        lbl_ver.setStyleSheet("color: #64748B; font-size: 11px; text-align: center;")
+        lbl_ver.setAlignment(Qt.AlignCenter)
+        sidebar_layout.addWidget(lbl_ver)
+
+        main_layout.addWidget(sidebar)
+
+        # 2. Right Workspace Container (Header Bar + View Stack)
+        workspace = QWidget()
+        workspace_layout = QVBoxLayout(workspace)
+        workspace_layout.setContentsMargins(0, 0, 0, 0)
+        workspace_layout.setSpacing(0)
+
+        # Top Header Bar
+        top_bar = QFrame()
+        top_bar.setObjectName("TopHeaderBar")
+        top_layout = QHBoxLayout(top_bar)
+        top_layout.setContentsMargins(16, 8, 16, 8)
+
+        self.lbl_header_title = QLabel("Dashboard")
+        self.lbl_header_title.setObjectName("HeaderTitle")
+        top_layout.addWidget(self.lbl_header_title)
+
+        top_layout.addStretch()
+
+        # Dynamic Theme Toggle Button
+        self.btn_theme_toggle = QPushButton("🌙 Modo Escuro")
+        self.btn_theme_toggle.setProperty("class", "btn-outline")
+        self.btn_theme_toggle.clicked.connect(self._toggle_theme)
+        top_layout.addWidget(self.btn_theme_toggle)
+
+        workspace_layout.addWidget(top_bar)
+
+        # Main Stacked Widget for Views
+        self.stack = QStackedWidget()
+
+        self.view_dashboard = DashboardView()
+        self.view_students = StudentsView()
+        self.view_exams = ExamsView()
+        self.view_generator = GeneratorView()
+        self.view_correction = CorrectionView()
+        self.view_audit = AuditView()
+        self.view_reports = ReportsView()
+
+        self.stack.addWidget(self.view_dashboard)
+        self.stack.addWidget(self.view_students)
+        self.stack.addWidget(self.view_exams)
+        self.stack.addWidget(self.view_generator)
+        self.stack.addWidget(self.view_correction)
+        self.stack.addWidget(self.view_audit)
+        self.stack.addWidget(self.view_reports)
+
+        workspace_layout.addWidget(self.stack)
+        main_layout.addWidget(workspace)
+
+        # Connect Navigation Signals
+        self.view_dashboard.navigate_to.connect(self._switch_view)
+        self.view_correction.batch_completed.connect(self._refresh_all_views)
+
+        # Default select Dashboard
+        self._switch_view(0)
+
+    def _switch_view(self, index: int):
+        self.stack.setCurrentIndex(index)
+
+        # Uncheck all nav buttons except active
+        for i, btn in enumerate(self.nav_buttons):
+            btn.setChecked(i == index)
+
+        titles = [
+            "Dashboard", "Alunos & Turmas", "Disciplinas & Provas",
+            "Gerador de Cartões (PDF)", "Executar Correção Automática em Lote",
+            "Fila de Auditoria Manual", "Relatórios & Logs"
+        ]
+        if index < len(titles):
+            self.lbl_header_title.setText(titles[index])
+
+        # Refresh data when switching to relevant view
+        if index == 0:
+            self.view_dashboard.refresh_dashboard()
+        elif index == 1:
+            self.view_students.load_data()
+        elif index == 2:
+            self.view_exams.load_data()
+        elif index == 3:
+            self.view_generator.load_provas_combo()
+        elif index == 4:
+            self.view_correction.load_provas_combo()
+            self.view_correction.refresh_historical_counters()
+        elif index == 5:
+            self.view_audit.load_pending_items()
+        elif index == 6:
+            self.view_reports.load_provas_combo()
+            self.view_reports.load_logs_table()
+
+    def _toggle_theme(self):
+        app = QApplication.instance()
+        is_dark = ThemeManager.toggle_theme(app)
+
+        if is_dark:
+            self.btn_theme_toggle.setText("🌙 Modo Escuro")
+        else:
+            self.btn_theme_toggle.setText("☀️ Modo Claro")
+
+    def _refresh_all_views(self):
+        self.view_dashboard.refresh_dashboard()
+        self.view_audit.load_pending_items()
+        self.view_reports.load_provas_combo()
+        self.view_reports.load_logs_table()
