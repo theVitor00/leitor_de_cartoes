@@ -1,7 +1,7 @@
 """
 Templates Management View (Gerenciador e Configurador de Modelos de Cartão).
-Supports 1, 2, 3, or 4 columns. Uses high-contrast Font Awesome icons
-with clear labels, tooltips, and non-clipping compact button sizing.
+Supports 1, 2, 3, or 4 columns. Uses high-contrast Font Awesome icons,
+centered data alignment for ID/Questões/Alternativas/Colunas/Assinatura, and clean action column.
 """
 
 import os
@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QHeaderView, QLineEdit, QComboBox, QDialog, QFormLayout,
     QMessageBox, QSpinBox, QCheckBox, QFileDialog, QColorDialog
 )
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from omr_app.assets.icons import get_icon
 from omr_app.database.models import Template, Prova
@@ -45,13 +46,14 @@ class TemplatesView(QWidget):
         layout.addLayout(top_layout)
 
         self.table_templates = QTableWidget()
-        self.table_templates.setColumnCount(8)
+        self.table_templates.setColumnCount(7)
         self.table_templates.setHorizontalHeaderLabels([
-            "ID", "Nome do Modelo", "Questões", "Alternativas", "Colunas", "Assinatura", "Cor Cabeçalho", "Ações do Modelo"
+            "ID", "Nome do Modelo", "Questões", "Alternativas", "Colunas", "Assinatura", "Ações do Modelo"
         ])
-        self.table_templates.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table_templates.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
-        self.table_templates.setColumnWidth(7, 310)
+        self.table_templates.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.table_templates.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table_templates.horizontalHeader().setSectionResizeMode(6, QHeaderView.Fixed)
+        self.table_templates.setColumnWidth(6, 310)
         self.table_templates.verticalHeader().setDefaultSectionSize(44)
         layout.addWidget(self.table_templates)
 
@@ -66,17 +68,36 @@ class TemplatesView(QWidget):
             opts_str = {3: "A-C", 4: "A-D", 5: "A-E"}.get(t.alternativas_por_questao, "A-E")
             ass_str = "Sim" if t.exibir_assinatura else "Não"
 
-            self.table_templates.setItem(row, 0, QTableWidgetItem(str(t.id)))
-            self.table_templates.setItem(row, 1, QTableWidgetItem(t.nome))
-            self.table_templates.setItem(row, 2, QTableWidgetItem(str(t.quantidade_questoes)))
-            self.table_templates.setItem(row, 3, QTableWidgetItem(opts_str))
-            self.table_templates.setItem(row, 4, QTableWidgetItem(f"{t.colunas} Coluna(s)"))
-            self.table_templates.setItem(row, 5, QTableWidgetItem(ass_str))
+            # Column 0: ID (Centered)
+            item_id = QTableWidgetItem(str(t.id))
+            item_id.setTextAlignment(Qt.AlignCenter)
+            self.table_templates.setItem(row, 0, item_id)
 
-            color_item = QTableWidgetItem(t.cor_cabecalho_hex)
-            color_item.setForeground(QColor(t.cor_cabecalho_hex))
-            self.table_templates.setItem(row, 6, color_item)
+            # Column 1: Nome do Modelo (Left aligned / Stretches)
+            item_nome = QTableWidgetItem(t.nome)
+            self.table_templates.setItem(row, 1, item_nome)
 
+            # Column 2: Questões (Centered)
+            item_q = QTableWidgetItem(str(t.quantidade_questoes))
+            item_q.setTextAlignment(Qt.AlignCenter)
+            self.table_templates.setItem(row, 2, item_q)
+
+            # Column 3: Alternativas (Centered)
+            item_alt = QTableWidgetItem(opts_str)
+            item_alt.setTextAlignment(Qt.AlignCenter)
+            self.table_templates.setItem(row, 3, item_alt)
+
+            # Column 4: Colunas (Centered)
+            item_cols = QTableWidgetItem(f"{t.colunas} Coluna(s)")
+            item_cols.setTextAlignment(Qt.AlignCenter)
+            self.table_templates.setItem(row, 4, item_cols)
+
+            # Column 5: Assinatura (Centered)
+            item_ass = QTableWidgetItem(ass_str)
+            item_ass.setTextAlignment(Qt.AlignCenter)
+            self.table_templates.setItem(row, 5, item_ass)
+
+            # Column 6: Ações do Modelo (Cell Widget Buttons)
             cell_widget = QWidget()
             h_box = QHBoxLayout(cell_widget)
             h_box.setContentsMargins(6, 4, 6, 4)
@@ -107,7 +128,7 @@ class TemplatesView(QWidget):
             h_box.addWidget(btn_edit)
             h_box.addWidget(btn_del)
 
-            self.table_templates.setCellWidget(row, 7, cell_widget)
+            self.table_templates.setCellWidget(row, 6, cell_widget)
 
     def _open_template_dialog(self, template_obj: Template = None):
         dialog = QDialog(self)

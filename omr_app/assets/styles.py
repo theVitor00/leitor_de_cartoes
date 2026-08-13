@@ -1,6 +1,7 @@
 """
 Theme Manager and QSS Stylesheets for OMR Application.
 Supports dynamic toggle between Light and Dark mode.
+Includes high-contrast rules for QComboBox drop-down popups, QMessageBox, and QDialog buttons.
 """
 
 # Color Palette Constants
@@ -15,7 +16,7 @@ COLOR_DANGER = "#EF4444"       # Red
 
 # QSS Templates
 DARK_THEME_QSS = """
-QMainWindow, QDialog {
+QMainWindow, QDialog, QMessageBox {
     background-color: #0F172A;
     color: #F8FAFC;
     font-family: 'Segoe UI', 'Inter', 'Roboto', sans-serif;
@@ -127,6 +128,32 @@ QComboBox::drop-down {
     padding-right: 8px;
 }
 
+/* QComboBox High Contrast Dropdown Popup List */
+QComboBox QAbstractItemView {
+    background-color: #1E293B;
+    color: #F8FAFC;
+    border: 1px solid #00AEA7;
+    border-radius: 6px;
+    padding: 4px;
+    outline: none;
+    selection-background-color: #00AEA7;
+    selection-color: #FFFFFF;
+}
+
+QComboBox QAbstractItemView::item {
+    min-height: 30px;
+    padding: 6px 10px;
+    color: #F8FAFC;
+    background-color: #1E293B;
+    border-radius: 4px;
+}
+
+QComboBox QAbstractItemView::item:hover, QComboBox QAbstractItemView::item:selected {
+    background-color: #00AEA7;
+    color: #FFFFFF;
+    font-weight: bold;
+}
+
 /* Tables */
 QTableWidget, QTableView {
     background-color: #1E293B;
@@ -208,6 +235,30 @@ QPushButton.btn-sm {
     min-height: 26px;
 }
 
+/* High Contrast MessageBox & Dialog Confirmation Buttons */
+QMessageBox {
+    background-color: #1E293B;
+}
+
+QMessageBox QLabel {
+    color: #F8FAFC;
+    font-size: 13px;
+}
+
+QMessageBox QPushButton, QDialogButtonBox QPushButton {
+    background-color: #00AEA7;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 20px;
+    font-weight: bold;
+    min-width: 75px;
+}
+
+QMessageBox QPushButton:hover, QDialogButtonBox QPushButton:hover {
+    background-color: #009690;
+}
+
 /* Progress Bar */
 QProgressBar {
     border: none;
@@ -285,7 +336,7 @@ QGroupBox::title {
 """
 
 LIGHT_THEME_QSS = """
-QMainWindow, QDialog {
+QMainWindow, QDialog, QMessageBox {
     background-color: #F8FAFC;
     color: #0F172A;
     font-family: 'Segoe UI', 'Inter', 'Roboto', sans-serif;
@@ -397,6 +448,32 @@ QComboBox::drop-down {
     padding-right: 8px;
 }
 
+/* QComboBox High Contrast Dropdown Popup List */
+QComboBox QAbstractItemView {
+    background-color: #FFFFFF;
+    color: #0F172A;
+    border: 1px solid #00AEA7;
+    border-radius: 6px;
+    padding: 4px;
+    outline: none;
+    selection-background-color: #00AEA7;
+    selection-color: #FFFFFF;
+}
+
+QComboBox QAbstractItemView::item {
+    min-height: 30px;
+    padding: 6px 10px;
+    color: #0F172A;
+    background-color: #FFFFFF;
+    border-radius: 4px;
+}
+
+QComboBox QAbstractItemView::item:hover, QComboBox QAbstractItemView::item:selected {
+    background-color: #00AEA7;
+    color: #FFFFFF;
+    font-weight: bold;
+}
+
 /* Tables */
 QTableWidget, QTableView {
     background-color: #FFFFFF;
@@ -476,6 +553,30 @@ QPushButton.btn-sm {
     font-size: 12px;
     font-weight: 600;
     min-height: 26px;
+}
+
+/* High Contrast MessageBox & Dialog Confirmation Buttons */
+QMessageBox {
+    background-color: #FFFFFF;
+}
+
+QMessageBox QLabel {
+    color: #0F172A;
+    font-size: 13px;
+}
+
+QMessageBox QPushButton, QDialogButtonBox QPushButton {
+    background-color: #00AEA7;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 20px;
+    font-weight: bold;
+    min-width: 75px;
+}
+
+QMessageBox QPushButton:hover, QDialogButtonBox QPushButton:hover {
+    background-color: #009690;
 }
 
 /* Progress Bar */
