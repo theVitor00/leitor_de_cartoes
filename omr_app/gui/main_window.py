@@ -1,7 +1,7 @@
 """
 Main Window for the PySide6 OMR Desktop Application.
-Integrates Sidebar Navigation, Top Header with Theme Switcher, and View Stack.
-Uses Font Awesome icons (qtawesome) with dynamic high contrast colors in Light & Dark modes.
+Integrates Sidebar Navigation with Official Cortex Logo, Application Favicon,
+Top Header with Theme Switcher, and View Stack.
 """
 
 from PySide6.QtWidgets import (
@@ -9,8 +9,10 @@ from PySide6.QtWidgets import (
     QStackedWidget, QFrame, QApplication
 )
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
 
 from omr_app.assets.icons import get_icon
+from omr_app.assets.logo_helper import get_app_icon, get_logo_svg_path
 from omr_app.gui.theme_manager import ThemeManager
 from omr_app.gui.views.dashboard_view import DashboardView
 from omr_app.gui.views.students_view import StudentsView
@@ -27,6 +29,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Sistema de Gestão e Correção Automática de Cartões OMR")
+        self.setWindowIcon(get_app_icon())
         self.resize(1320, 840)
         self.setMinimumSize(1080, 700)
 
@@ -48,9 +51,26 @@ class MainWindow(QMainWindow):
         sidebar_layout.setContentsMargins(12, 16, 12, 16)
         sidebar_layout.setSpacing(8)
 
-        lbl_logo = QLabel("LEITOR OMR")
-        lbl_logo.setObjectName("SidebarTitle")
-        sidebar_layout.addWidget(lbl_logo)
+        # Sidebar Logo Header (Cortex SVG Logo + Title)
+        logo_container = QHBoxLayout()
+        logo_container.setContentsMargins(4, 8, 4, 8)
+        logo_container.setSpacing(10)
+
+        svg_path = get_logo_svg_path()
+        if svg_path:
+            pixmap = QPixmap(svg_path)
+            if not pixmap.isNull():
+                lbl_logo_img = QLabel()
+                lbl_logo_img.setPixmap(pixmap.scaled(38, 38, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                logo_container.addWidget(lbl_logo_img)
+
+        lbl_logo_text = QLabel("LEITOR OMR")
+        lbl_logo_text.setObjectName("SidebarTitle")
+        lbl_logo_text.setStyleSheet("font-size: 18px; font-weight: bold; color: #00AEA7; padding: 0;")
+        logo_container.addWidget(lbl_logo_text)
+        logo_container.addStretch()
+
+        sidebar_layout.addLayout(logo_container)
 
         lbl_sub = QLabel("Gestão & Correção de Cartões")
         lbl_sub.setObjectName("SidebarSubtitle")
@@ -80,7 +100,7 @@ class MainWindow(QMainWindow):
 
         sidebar_layout.addStretch()
 
-        lbl_ver = QLabel("v3.2.0 - PySide6 / OpenCV")
+        lbl_ver = QLabel("v3.3.0 - PySide6 / OpenCV")
         lbl_ver.setStyleSheet("color: #64748B; font-size: 11px; text-align: center;")
         lbl_ver.setAlignment(Qt.AlignCenter)
         sidebar_layout.addWidget(lbl_ver)
@@ -165,7 +185,6 @@ class MainWindow(QMainWindow):
         if index < len(titles):
             self.lbl_header_title.setText(titles[index])
 
-        # Toggle button icon update
         if is_dark:
             self.btn_theme_toggle.setText(" Modo Escuro")
             self.btn_theme_toggle.setIcon(get_icon("moon", color="#F8FAFC"))

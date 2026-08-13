@@ -1,7 +1,7 @@
 """
 Dynamic PDF Answer Sheet Generator using ReportLab.
 Supports 1, 2, 3, or 4 columns layout, 3-5 options (A-C, A-D, A-E),
-custom header accent colors, optional logo images, and optional student signature box.
+custom header accent colors, institution logo (defaults to logo_cortex.png), and student signature box.
 Explicitly ensures all OMR bubbles (A, B, C, D, E) render with clean white background.
 """
 
@@ -12,6 +12,7 @@ from reportlab.pdfgen import canvas
 from reportlab.graphics.shapes import Drawing
 from reportlab.graphics.barcode import qr
 from omr_app.core.security import generate_qr_payload
+from omr_app.assets.logo_helper import get_logo_png_path
 
 NAVY_HEX = colors.HexColor("#002970")
 DARK_GRAY = colors.HexColor("#1E293B")
@@ -57,7 +58,7 @@ class OMRPDFGenerator:
         # 1. Solid Black Crop Marks (1cm x 1cm)
         self._draw_crop_marks(c)
 
-        # 2. Institutional Header & Logo
+        # 2. Institutional Header & Logo (Defaults to Cortex Logo)
         self._draw_header(c, prova_title, materia_nome, turma_nome, data_str, header_color, caminho_logo)
 
         # 3. Student Info & QR Code
@@ -93,6 +94,9 @@ class OMRPDFGenerator:
         header_color: colors.Color,
         logo_path: str = None
     ):
+        if not logo_path or not os.path.exists(logo_path):
+            logo_path = get_logo_png_path()
+
         top_y = PAGE_HEIGHT - 65.0
         text_x = 65.0
 
@@ -231,7 +235,6 @@ class OMRPDFGenerator:
 
         options_letters = ["A", "B", "C", "D", "E"][:num_options]
 
-        # Spacing and radius adjustments for 1, 2, 3, or 4 columns
         if cols == 4:
             bubble_radius = 4.5
             option_spacing = 15.0
@@ -278,7 +281,6 @@ class OMRPDFGenerator:
                 c.setFillColor(DARK_GRAY)
                 c.drawString(col_x_start, row_y, f"{q_num:02d}.")
 
-                # DRAW BUBBLES - CRITICAL FIX: EXPLICITLY RESET FILL TO WHITE BEFORE EACH CIRCLE!
                 for opt_idx in range(num_options):
                     bx = col_x_start + label_offset_x + (opt_idx * option_spacing)
                     by = row_y + 2.5
