@@ -339,7 +339,8 @@ class TemplatesView(QWidget):
         reply = QMessageBox.question(
             self, "Confirmar Exclusão",
             f"Deseja realmente excluir o modelo '{template_obj.nome}'?",
-            QMessageBox.Yes | QMessageBox.No
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
         )
         if reply == QMessageBox.Yes:
             template_obj.delete_instance()
