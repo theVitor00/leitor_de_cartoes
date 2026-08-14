@@ -4,6 +4,7 @@ Integration tests for complete OMR PDF generation and image reading pipeline.
 
 import os
 import unittest
+import numpy as np
 from omr_app.database.db_manager import init_db
 from omr_app.database.models import Prova, Aluno, Template, Materia, Turma
 from omr_app.core.pdf_generator import OMRPDFGenerator
@@ -106,6 +107,26 @@ class TestOMRPipelineIntegration(unittest.TestCase):
         self.assertEqual(res_dict["prova_id"], self.prova.id)
         self.assertEqual(res_dict["aluno_id"], self.aluno.id)
         self.assertTrue(os.path.exists(res_dict["annotated_path"]))
+
+    def test_perspective_error_handling(self):
+        # Plain white image with no crop marks
+        blank_img = np.full((1000, 1000, 3), 255, dtype=np.uint8)
+        engine = OMREngine()
+
+        reading_res = engine.read_sheet(blank_img)
+        self.assertEqual(reading_res.status, OMRStatus.PERSPECTIVE_ERROR)
+        self.assertIn("Marcadores de perspectiva não encontrados", reading_res.mensagem)
+
+        res_dict = engine.process_sheet_image(blank_img)
+        self.assertEqual(res_dict["status"], OMRStatus.PERSPECTIVE_ERROR.value)
+        self.assertEqual(res_dict["nota_final"], 0.0)
+        self.assertTrue(os.path.exists(res_dict["annotated_path"]))
+
+    def test_invalid_image_handling(self):
+        engine = OMREngine()
+        res = engine.process_sheet_image(None)
+        self.assertEqual(res["status"], "ERRO_LEITURA")
+        self.assertEqual(res["nota_final"], 0.0)
 
 
 if __name__ == "__main__":

@@ -64,7 +64,7 @@ class OMRReadingResult:
     warped_image: Optional[np.ndarray] = None
     mensagem: str = ""
 
-    def to_dict() -> dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Converts result into backwards-compatible dict for existing GUI & legacy consumers."""
         return {
             "status": self.status.value if isinstance(self.status, Enum) else str(self.status),
@@ -92,7 +92,7 @@ class ExamGradingResult:
     detalhes_status: list[str] = field(default_factory=list)
     mensagem: str = ""
 
-    def to_dict() -> dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Converts result into backwards-compatible dict."""
         return {
             "status": self.status.value if isinstance(self.status, Enum) else str(self.status),

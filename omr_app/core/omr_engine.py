@@ -28,13 +28,13 @@ class OMREngine:
     Refactored to separate OMR reading from Exam Grading.
     """
 
-    def __init__(self, scans_dir: Optional[str] = None, config: OMRConfig = DEFAULT_OMR_CONFIG):
+    def __init__(self, scans_dir: Optional[str] = None, config: Optional[OMRConfig] = None):
         if not scans_dir:
             base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             scans_dir = os.path.join(base_dir, "scans")
         os.makedirs(scans_dir, exist_ok=True)
         self.scans_dir = scans_dir
-        self.config = config
+        self.config = config if config is not None else DEFAULT_OMR_CONFIG
         self.qr_detector = cv2.QRCodeDetector()
 
     def read_sheet(
@@ -80,7 +80,7 @@ class OMREngine:
         if not warp_success:
             warped_bgr = cv2.resize(image_bgr, (self.config.warp_width, self.config.warp_height))
             status = OMRStatus.PERSPECTIVE_ERROR
-            detalhes.append("Marcadores de perspectiva não encontrados. Geometria não confiável.")
+            detalhes.append("Marcadores de perspectiva não encontrados ou desalinhados. Geometria não confiável.")
 
         # 3. QR Code Reading
         qr_valid, prova_id_qr, aluno_id_qr = self._read_qr_code(warped_bgr)
@@ -166,10 +166,15 @@ class OMREngine:
             qr_valid=reading_res.qr_valid
         )
 
-        # Merge reading status and grading status safely
-        final_status = reading_res.status.value
-        if grading_res.status != OMRStatus.OK and final_status == OMRStatus.OK.value:
+        # Determine final combined status without hiding errors
+        if reading_res.status in (OMRStatus.PERSPECTIVE_ERROR, OMRStatus.INVALID_IMAGE):
+            final_status = reading_res.status.value
+        elif reading_res.status != OMRStatus.OK:
+            final_status = reading_res.status.value
+        elif grading_res.status != OMRStatus.OK:
             final_status = grading_res.status.value
+        else:
+            final_status = OMRStatus.OK.value
 
         mensagens = []
         if reading_res.mensagem and "sucesso" not in reading_res.mensagem.lower():
@@ -194,12 +199,16 @@ class OMREngine:
         annotated_path = os.path.join(self.scans_dir, annotated_filename)
         cv2.imwrite(annotated_path, annotated_bgr)
 
+        # If perspective calibration failed, do not produce a valid grade
+        nota_final = grading_res.nota_final if reading_res.status == OMRStatus.OK else 0.0
+        acertos = grading_res.acertos if reading_res.status == OMRStatus.OK else 0
+
         return {
             "status": final_status,
             "aluno_id": reading_res.aluno_id,
             "prova_id": reading_res.prova_id,
-            "nota_final": grading_res.nota_final,
-            "acertos": grading_res.acertos,
+            "nota_final": nota_final,
+            "acertos": acertos,
             "total_questoes": grading_res.total_questoes,
             "respostas": reading_res.respostas,
             "flagged_boxes": grading_res.flagged_boxes,
@@ -209,7 +218,8 @@ class OMREngine:
 
     def _warp_perspective(self, img: np.ndarray) -> tuple[np.ndarray, bool]:
         """
-        Detects 4 corner crop marks and warps perspective to normalized canvas.
+        Detects 4 corner crop marks, validates quadrant placement and area consistency,
+        and warps perspective to normalized canvas (1000x1414).
         Returns (warped_image, success_boolean).
         """
         h, w = img.shape[:2]
@@ -222,16 +232,18 @@ class OMREngine:
 
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        candidates = []
         min_area = (w * h) * self.config.min_marker_area_ratio
         max_area = (w * h) * self.config.max_marker_area_ratio
+
+        # Partition candidates into 4 corner quadrants
+        quad_tl, quad_tr, quad_bl, quad_br = [], [], [], []
 
         for cnt in contours:
             area = cv2.contourArea(cnt)
             if min_area < area < max_area:
                 peri = cv2.arcLength(cnt, True)
                 approx = cv2.approxPolyDP(cnt, 0.04 * peri, True)
-                if len(approx) == 4:
+                if 4 <= len(approx) <= 8:
                     _, _, cw, ch = cv2.boundingRect(approx)
                     aspect_ratio = float(cw) / ch if ch > 0 else 0
                     if self.config.marker_aspect_ratio_min <= aspect_ratio <= self.config.marker_aspect_ratio_max:
@@ -239,27 +251,41 @@ class OMREngine:
                         if M["m00"] != 0:
                             cx = int(M["m10"] / M["m00"])
                             cy = int(M["m01"] / M["m00"])
-                            candidates.append((cx, cy))
+                            cand = (cx, cy, area)
 
-        if len(candidates) >= 4:
-            candidates = sorted(candidates, key=lambda p: (p[1], p[0]))
-            top_two = sorted(candidates[:2], key=lambda p: p[0])
-            bottom_two = sorted(candidates[-2:], key=lambda p: p[0])
+                            if cx < 0.45 * w and cy < 0.45 * h:
+                                quad_tl.append(cand)
+                            elif cx > 0.55 * w and cy < 0.45 * h:
+                                quad_tr.append(cand)
+                            elif cx < 0.45 * w and cy > 0.55 * h:
+                                quad_bl.append(cand)
+                            elif cx > 0.55 * w and cy > 0.55 * h:
+                                quad_br.append(cand)
 
-            tl, tr = top_two[0], top_two[1]
-            bl, br = bottom_two[0], bottom_two[1]
+        # Must find candidates in all 4 corner quadrants
+        if quad_tl and quad_tr and quad_bl and quad_br:
+            tl = min(quad_tl, key=lambda c: (c[0]**2 + c[1]**2))
+            tr = min(quad_tr, key=lambda c: ((w - c[0])**2 + c[1]**2))
+            bl = min(quad_bl, key=lambda c: (c[0]**2 + (h - c[1])**2))
+            br = min(quad_br, key=lambda c: ((w - c[0])**2 + (h - c[1])**2))
 
-            pts1 = np.float32([tl, tr, br, bl])
-            pts2 = np.float32([
-                [0, 0],
-                [self.config.warp_width, 0],
-                [self.config.warp_width, self.config.warp_height],
-                [0, self.config.warp_height]
-            ])
+            selected = [tl, tr, br, bl]
+            areas = [c[2] for c in selected]
+            max_a, min_a = max(areas), min(areas)
 
-            M = cv2.getPerspectiveTransform(pts1, pts2)
-            warped = cv2.warpPerspective(img, M, (self.config.warp_width, self.config.warp_height))
-            return warped, True
+            # Marker size consistency validation across corners
+            if min_a > 0 and (max_a / min_a) <= 3.5:
+                pts1 = np.float32([[tl[0], tl[1]], [tr[0], tr[1]], [br[0], br[1]], [bl[0], bl[1]]])
+                pts2 = np.float32([
+                    [0, 0],
+                    [self.config.warp_width, 0],
+                    [self.config.warp_width, self.config.warp_height],
+                    [0, self.config.warp_height]
+                ])
+
+                M = cv2.getPerspectiveTransform(pts1, pts2)
+                warped = cv2.warpPerspective(img, M, (self.config.warp_width, self.config.warp_height))
+                return warped, True
 
         return img, False
 
@@ -277,6 +303,8 @@ class OMREngine:
 
             if decoded_text:
                 return verify_and_decode_qr_payload(decoded_text)
+        except cv2.error as e:
+            pass
         except Exception:
             pass
 

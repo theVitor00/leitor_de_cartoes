@@ -13,6 +13,7 @@ from reportlab.graphics.shapes import Drawing
 from reportlab.graphics.barcode import qr
 from omr_app.core.security import generate_qr_payload
 from omr_app.assets.logo_helper import get_logo_png_path
+from omr_app.core.layout import SheetLayout
 
 NAVY_HEX = colors.HexColor("#002970")
 DARK_GRAY = colors.HexColor("#1E293B")
@@ -214,8 +215,10 @@ class OMRPDFGenerator:
     def _draw_omr_bubble_grid(
         self, c: canvas.Canvas, num_questions: int, num_options: int, colunas: int
     ):
-        start_y = PAGE_HEIGHT - 300.0
-        box_w = PAGE_WIDTH - 130.0
+        layout = SheetLayout(num_questions=num_questions, num_options=num_options, colunas=colunas)
+
+        start_y = layout.grid_start_y
+        box_w = layout.grid_box_w
         box_h = start_y - 65.0
 
         c.setStrokeColor(NAVY_HEX)
@@ -229,49 +232,30 @@ class OMRPDFGenerator:
         c.setFont("Helvetica-Bold", 11)
         c.drawCentredString(PAGE_WIDTH / 2.0, start_y - 17.0, "FOLHA DE RESPOSTAS (MARQUE UMA OPÇÃO POR QUESTÃO)")
 
-        cols = max(1, min(4, colunas))
-        q_per_col = (num_questions + cols - 1) // cols
-        col_width = box_w / float(cols)
+        cols = layout.colunas
+        q_per_col = layout.q_per_col
+        col_width = layout.col_width
+        options_letters = layout.options_letters
 
-        options_letters = ["A", "B", "C", "D", "E"][:num_options]
-
-        if cols == 4:
-            bubble_radius = 4.5
-            option_spacing = 15.0
-            label_offset_x = 35.0
-        elif cols == 3:
-            bubble_radius = 5.5
-            option_spacing = 20.0
-            label_offset_x = 42.0
-        elif cols == 2:
-            bubble_radius = 7.0
-            option_spacing = 26.0
-            label_offset_x = 55.0
-        else:
-            bubble_radius = 8.0
-            option_spacing = 35.0
-            label_offset_x = 70.0
-
-        grid_top_y = start_y - 45.0
-        available_height = grid_top_y - 80.0
-        row_height = min(24.0, available_height / max(q_per_col, 1))
+        grid_top_y = layout.grid_top_y
+        row_height = layout.row_height
 
         for col_idx in range(cols):
-            col_x_start = 65.0 + (col_idx * col_width) + (8.0 if cols == 4 else 12.0)
+            col_x_start = layout.get_column_x_start_pdf(col_idx)
 
             c.setFont("Helvetica-Bold", 8 if cols >= 3 else 10)
             c.setFillColor(NAVY_HEX)
 
             for opt_idx, letter in enumerate(options_letters):
-                lx = col_x_start + label_offset_x + (opt_idx * option_spacing)
+                lx = col_x_start + layout.label_offset_x_pt + (opt_idx * layout.option_spacing_pt)
                 c.drawCentredString(lx, grid_top_y, letter)
-
-            row_y = grid_top_y - 22.0
 
             for q_in_col in range(q_per_col):
                 q_num = (col_idx * q_per_col) + q_in_col + 1
                 if q_num > num_questions:
                     break
+
+                _, _, row_y = layout.get_question_row_y_pdf(q_num)
 
                 if q_num % 2 == 0:
                     c.setFillColor(LIGHT_GRAY)
@@ -282,8 +266,7 @@ class OMRPDFGenerator:
                 c.drawString(col_x_start, row_y, f"{q_num:02d}.")
 
                 for opt_idx in range(num_options):
-                    bx = col_x_start + label_offset_x + (opt_idx * option_spacing)
-                    by = row_y + 2.5
+                    bx, by, bubble_radius = layout.get_bubble_pdf_center(q_num, opt_idx)
 
                     c.setFillColor(colors.white)
                     c.setStrokeColor(DARK_GRAY)

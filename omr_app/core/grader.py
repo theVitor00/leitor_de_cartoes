@@ -40,7 +40,14 @@ class ExamGrader:
             status = OMRStatus.REVISAO_NECESSARIA
             detalhes_status.append("Gabarito não fornecido.")
 
-        total_q = max(num_questions, len(respostas_marcadas) if respostas_marcadas else 0)
+        total_q = num_questions if num_questions > 0 else 10
+
+        # Check for structural inconsistency (more extracted answers than exam questions)
+        if respostas_marcadas and len(respostas_marcadas) > total_q:
+            status = OMRStatus.REVISAO_NECESSARIA
+            detalhes_status.append(
+                f"Inconsistência estrutural: prova espera {total_q} questões, mas leitura retornou {len(respostas_marcadas)}."
+            )
 
         for q in range(1, total_q + 1):
             q_str = str(q)
@@ -48,15 +55,20 @@ class ExamGrader:
             gab_resp = gabarito_dict.get(q_str, "") if gabarito_dict else ""
 
             is_double_marked = "|" in resp_lid
+            is_unreadable = resp_lid in ("?", "UNREADABLE", "AMBIGUOUS")
+
             if is_double_marked:
                 status = OMRStatus.REVISAO_NECESSARIA
                 detalhes_status.append(f"Questão {q_str}: Dupla marcação ({resp_lid}).")
+            elif is_unreadable:
+                status = OMRStatus.REVISAO_NECESSARIA
+                detalhes_status.append(f"Questão {q_str}: Marcação ilegível ou ambígua ({resp_lid}).")
             elif resp_lid == "-":
                 pass
             elif gab_resp and resp_lid == gab_resp:
                 acertos += 1
 
-            if is_double_marked or not qr_valid:
+            if is_double_marked or is_unreadable:
                 box_list = layout.get_question_bounding_box(q).to_list() if layout else [0, 0, 0, 0]
                 flagged_boxes.append({
                     "question": q_str,
