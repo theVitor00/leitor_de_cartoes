@@ -22,8 +22,10 @@ from omr_app.gui.main_window import MainWindow
 def test_full_pipeline():
     print("=== TEST 1: Database & GUI MainWindow Init with Font Awesome Icons ===")
     db_path = init_db()
-    app = QApplication(sys.argv)
+    app = QApplication.instance() or QApplication(sys.argv)
     window = MainWindow()
+    window.close()
+    app.quit()
     print(f"Database: {db_path} | GUI MainWindow & Font Awesome Icons initialized successfully!")
 
     print("\n=== TEST 2: Template Creation (4 Columns, 20 Questions, A-E) ===")

@@ -1,38 +1,120 @@
 """
 Core OMR OpenCV Engine for Perspective Calibration, QR Code Reading,
-Dynamic Bubble Sampling (1-4 cols, 3-5 options), Custom Sensitivity Slider,
-and Automatic Grading with Bounding Box Coordinates for Audit.
+Dynamic Bubble Sampling using SheetLayout, and Exam Grading.
 """
 
 import os
+from datetime import datetime
+from typing import Optional
 import cv2
 import numpy as np
-from datetime import datetime
+
+from omr_app.core.config import OMRConfig, DEFAULT_OMR_CONFIG
+from omr_app.core.layout import SheetLayout
+from omr_app.core.types import (
+    OMRStatus, OMRReadingResult, DetectedQuestion, DetectedBubble
+)
+from omr_app.core.grader import ExamGrader
 from omr_app.core.security import verify_and_decode_qr_payload
 
-# Target dimensions for warped perspective canvas (A4 ratio)
-WARP_WIDTH = 1000
-WARP_HEIGHT = 1414
+# Legacy export constants for backwards compatibility
+WARP_WIDTH = DEFAULT_OMR_CONFIG.warp_width
+WARP_HEIGHT = DEFAULT_OMR_CONFIG.warp_height
 
 
 class OMREngine:
     """
-    OpenCV-based OMR Scanner and Grader.
+    OpenCV-based OMR Scanner and Image Reader.
+    Refactored to separate OMR reading from Exam Grading.
     """
 
-    def __init__(self, scans_dir: str = None):
+    def __init__(self, scans_dir: Optional[str] = None, config: OMRConfig = DEFAULT_OMR_CONFIG):
         if not scans_dir:
             base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             scans_dir = os.path.join(base_dir, "scans")
         os.makedirs(scans_dir, exist_ok=True)
         self.scans_dir = scans_dir
+        self.config = config
         self.qr_detector = cv2.QRCodeDetector()
+
+    def read_sheet(
+        self,
+        image_bgr: np.ndarray,
+        expected_prova_id: Optional[int] = None,
+        num_questions: int = 10,
+        num_options: int = 5,
+        colunas: int = 2,
+        sensitivity_pct: float = 45.0
+    ) -> OMRReadingResult:
+        """
+        Pure OMR Extraction Pipeline:
+        1. Image Validation
+        2. Perspective Calibration & Canvas Normalization
+        3. QR Code Decoding
+        4. Bubble Grid Reading (via SheetLayout)
+        5. Visual Annotation
+        """
+        # 1. Validation
+        if image_bgr is None or image_bgr.size == 0:
+            return OMRReadingResult(
+                status=OMRStatus.INVALID_IMAGE,
+                prova_id=expected_prova_id,
+                aluno_id=None,
+                qr_valid=False,
+                respostas={},
+                mensagem="Imagem inválida ou vazia."
+            )
+
+        layout = SheetLayout(
+            num_questions=num_questions,
+            num_options=num_options,
+            colunas=colunas,
+            config=self.config
+        )
+
+        # 2. Perspective Warp
+        warped_bgr, warp_success = self._warp_perspective(image_bgr)
+        status = OMRStatus.OK
+        detalhes: list[str] = []
+
+        if not warp_success:
+            warped_bgr = cv2.resize(image_bgr, (self.config.warp_width, self.config.warp_height))
+            status = OMRStatus.PERSPECTIVE_ERROR
+            detalhes.append("Marcadores de perspectiva não encontrados. Geometria não confiável.")
+
+        # 3. QR Code Reading
+        qr_valid, prova_id_qr, aluno_id_qr = self._read_qr_code(warped_bgr)
+        prova_id = prova_id_qr if qr_valid else expected_prova_id
+        aluno_id = aluno_id_qr if qr_valid else None
+
+        if not qr_valid:
+            if status == OMRStatus.OK:
+                status = OMRStatus.REVISAO_NECESSARIA
+            detalhes.append("QR Code não identificado ou hash de segurança inválido.")
+
+        # 4. Bubble Grid Extraction
+        respostas, detected_questions, debug_bubbles = self._read_bubble_grid(
+            warped_bgr,
+            layout=layout,
+            sensitivity_pct=sensitivity_pct
+        )
+
+        return OMRReadingResult(
+            status=status,
+            prova_id=prova_id,
+            aluno_id=aluno_id,
+            qr_valid=qr_valid,
+            respostas=respostas,
+            detected_questions=detected_questions,
+            warped_image=warped_bgr,
+            mensagem=" | ".join(detalhes) if detalhes else "Leitura efetuada com sucesso."
+        )
 
     def process_sheet_image(
         self,
         image_bgr: np.ndarray,
-        expected_prova_id: int = None,
-        gabarito_dict: dict = None,
+        expected_prova_id: Optional[int] = None,
+        gabarito_dict: Optional[dict] = None,
         valor_total: float = 10.0,
         num_questions: int = 10,
         num_options: int = 5,
@@ -40,10 +122,20 @@ class OMREngine:
         sensitivity_pct: float = 45.0
     ) -> dict:
         """
-        Processes a single scanned sheet image.
-        Returns a dict with extracted info, answers, score, status, annotated image path, and question bounding boxes.
+        Full end-to-end process: OMR Sheet Reading + Exam Grading + Visual Annotation.
+        Maintains complete backwards compatibility by returning a dictionary.
         """
-        if image_bgr is None or image_bgr.size == 0:
+        # Step A: Perform OMR Reading
+        reading_res = self.read_sheet(
+            image_bgr=image_bgr,
+            expected_prova_id=expected_prova_id,
+            num_questions=num_questions,
+            num_options=num_options,
+            colunas=colunas,
+            sensitivity_pct=sensitivity_pct
+        )
+
+        if reading_res.status == OMRStatus.INVALID_IMAGE:
             return {
                 "status": "ERRO_LEITURA",
                 "aluno_id": None,
@@ -54,97 +146,85 @@ class OMREngine:
                 "respostas": {},
                 "flagged_boxes": [],
                 "annotated_path": None,
-                "mensagem": "Imagem inválida ou vazia."
+                "mensagem": reading_res.mensagem
             }
 
-        # 1. Perspective Warp based on 4 Corner Crop Marks
-        warped_bgr, warp_success = self._warp_perspective(image_bgr)
-        if not warp_success:
-            warped_bgr = cv2.resize(image_bgr, (WARP_WIDTH, WARP_HEIGHT))
-
-        # 2. QR Code Decoding & SHA256 Hash Verification
-        qr_valid, prova_id_qr, aluno_id_qr = self._read_qr_code(warped_bgr)
-
-        prova_id = prova_id_qr if qr_valid else expected_prova_id
-        aluno_id = aluno_id_qr if qr_valid else None
-
-        # 3. Read OMR Bubble Grid with Custom Sensitivity
-        respostas_marcadas, debug_bubbles = self._read_bubble_grid(
-            warped_bgr,
+        layout = SheetLayout(
             num_questions=num_questions,
             num_options=num_options,
             colunas=colunas,
-            sensitivity_pct=sensitivity_pct
+            config=self.config
         )
 
-        # 4. Automatic Grading & Rule Evaluation
-        acertos = 0
-        status = "OK"
-        detalhes_status = []
-        flagged_boxes = []
+        # Step B: Perform Exam Grading
+        grading_res = ExamGrader.grade(
+            respostas_marcadas=reading_res.respostas,
+            gabarito_dict=gabarito_dict,
+            valor_total=valor_total,
+            num_questions=num_questions,
+            layout=layout,
+            qr_valid=reading_res.qr_valid
+        )
 
-        if not qr_valid:
-            status = "REVISAO_NECESSARIA"
-            detalhes_status.append("QR Code não identificado ou hash de segurança inválido (clonagem/adulteração).")
+        # Merge reading status and grading status safely
+        final_status = reading_res.status.value
+        if grading_res.status != OMRStatus.OK and final_status == OMRStatus.OK.value:
+            final_status = grading_res.status.value
 
-        if gabarito_dict:
-            for q_str, resp_lid in respostas_marcadas.items():
-                gab_resp = gabarito_dict.get(q_str, "")
+        mensagens = []
+        if reading_res.mensagem and "sucesso" not in reading_res.mensagem.lower():
+            mensagens.append(reading_res.mensagem)
+        if grading_res.mensagem and "sucesso" not in grading_res.mensagem.lower():
+            mensagens.append(grading_res.mensagem)
+        mensagem_final = " | ".join(mensagens) if mensagens else "Correção efetuada com sucesso."
 
-                if "|" in resp_lid:
-                    status = "REVISAO_NECESSARIA"
-                    detalhes_status.append(f"Questão {q_str}: Dupla marcação ({resp_lid}).")
-                elif resp_lid == "-":
-                    pass
-                elif resp_lid == gab_resp:
-                    acertos += 1
-
-                if "|" in resp_lid or not qr_valid:
-                    q_num = int(q_str)
-                    box = self._get_question_bounding_box(q_num, num_questions, num_options, colunas)
-                    flagged_boxes.append({"question": q_str, "box": box, "reason": resp_lid})
-        else:
-            status = "REVISAO_NECESSARIA"
-            detalhes_status.append("Gabarito não fornecido.")
-
-        nota_final = (acertos / num_questions) * valor_total if num_questions > 0 else 0.0
-
-        # 5. Draw Visual Overlay
+        # Step C: Visual Annotation
+        debug_bubbles = [
+            (str(q.question_num), [(b.letter, b.fill_ratio, b.cx, b.cy) for b in q.options])
+            for q in reading_res.detected_questions
+        ]
         annotated_bgr = self._annotate_image(
-            warped_bgr, respostas_marcadas, gabarito_dict, debug_bubbles
+            reading_res.warped_image, reading_res.respostas, gabarito_dict, debug_bubbles
         )
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        annotated_filename = f"scan_{prova_id}_{aluno_id}_{timestamp}.png"
+        p_id = reading_res.prova_id or expected_prova_id
+        a_id = reading_res.aluno_id or 0
+        annotated_filename = f"scan_{p_id}_{a_id}_{timestamp}.png"
         annotated_path = os.path.join(self.scans_dir, annotated_filename)
         cv2.imwrite(annotated_path, annotated_bgr)
 
         return {
-            "status": status,
-            "aluno_id": aluno_id,
-            "prova_id": prova_id,
-            "nota_final": round(nota_final, 2),
-            "acertos": acertos,
-            "total_questoes": num_questions,
-            "respostas": respostas_marcadas,
-            "flagged_boxes": flagged_boxes,
+            "status": final_status,
+            "aluno_id": reading_res.aluno_id,
+            "prova_id": reading_res.prova_id,
+            "nota_final": grading_res.nota_final,
+            "acertos": grading_res.acertos,
+            "total_questoes": grading_res.total_questoes,
+            "respostas": reading_res.respostas,
+            "flagged_boxes": grading_res.flagged_boxes,
             "annotated_path": annotated_path,
-            "mensagem": " | ".join(detalhes_status) if detalhes_status else "Correção efetuada com sucesso."
+            "mensagem": mensagem_final
         }
 
     def _warp_perspective(self, img: np.ndarray) -> tuple[np.ndarray, bool]:
+        """
+        Detects 4 corner crop marks and warps perspective to normalized canvas.
+        Returns (warped_image, success_boolean).
+        """
         h, w = img.shape[:2]
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        blurred = cv2.GaussianBlur(gray, self.config.gaussian_blur_kernel, 0)
         thresh = cv2.adaptiveThreshold(
-            blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2
+            blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY_INV, self.config.adaptive_thresh_block_size, self.config.adaptive_thresh_c
         )
 
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         candidates = []
-        min_area = (w * h) * 0.0001
-        max_area = (w * h) * 0.02
+        min_area = (w * h) * self.config.min_marker_area_ratio
+        max_area = (w * h) * self.config.max_marker_area_ratio
 
         for cnt in contours:
             area = cv2.contourArea(cnt)
@@ -152,9 +232,9 @@ class OMREngine:
                 peri = cv2.arcLength(cnt, True)
                 approx = cv2.approxPolyDP(cnt, 0.04 * peri, True)
                 if len(approx) == 4:
-                    x, y, cw, ch = cv2.boundingRect(approx)
+                    _, _, cw, ch = cv2.boundingRect(approx)
                     aspect_ratio = float(cw) / ch if ch > 0 else 0
-                    if 0.7 <= aspect_ratio <= 1.3:
+                    if self.config.marker_aspect_ratio_min <= aspect_ratio <= self.config.marker_aspect_ratio_max:
                         M = cv2.moments(cnt)
                         if M["m00"] != 0:
                             cx = int(M["m10"] / M["m00"])
@@ -170,18 +250,26 @@ class OMREngine:
             bl, br = bottom_two[0], bottom_two[1]
 
             pts1 = np.float32([tl, tr, br, bl])
-            pts2 = np.float32([[0, 0], [WARP_WIDTH, 0], [WARP_WIDTH, WARP_HEIGHT], [0, WARP_HEIGHT]])
+            pts2 = np.float32([
+                [0, 0],
+                [self.config.warp_width, 0],
+                [self.config.warp_width, self.config.warp_height],
+                [0, self.config.warp_height]
+            ])
 
             M = cv2.getPerspectiveTransform(pts1, pts2)
-            warped = cv2.warpPerspective(img, M, (WARP_WIDTH, WARP_HEIGHT))
+            warped = cv2.warpPerspective(img, M, (self.config.warp_width, self.config.warp_height))
             return warped, True
 
         return img, False
 
     def _read_qr_code(self, img: np.ndarray) -> tuple[bool, int, int]:
+        """Reads and decodes QR Code in top right region of normalized canvas."""
         try:
             h, w = img.shape[:2]
-            top_region = img[0:int(h * 0.35), int(w * 0.45):w]
+            crop_h = int(h * self.config.qr_crop_height_ratio)
+            crop_w = int(w * self.config.qr_crop_width_start_ratio)
+            top_region = img[0:crop_h, crop_w:w]
 
             decoded_text, _, _ = self.qr_detector.detectAndDecode(top_region)
             if not decoded_text:
@@ -197,58 +285,27 @@ class OMREngine:
     def _read_bubble_grid(
         self,
         img: np.ndarray,
-        num_questions: int = 10,
-        num_options: int = 5,
-        colunas: int = 2,
+        layout: SheetLayout,
         sensitivity_pct: float = 45.0
-    ) -> tuple[dict, list]:
+    ) -> tuple[dict[str, str], list[DetectedQuestion], list]:
+        """Reads OMR bubble grid using geometry from SheetLayout."""
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
-        cols = max(1, min(4, colunas))
-        q_per_col = (num_questions + cols - 1) // cols
-        options_letters = ["A", "B", "C", "D", "E"][:num_options]
-
         threshold_ratio = sensitivity_pct / 100.0
-
         respostas = {}
+        detected_questions = []
         debug_bubbles = []
 
-        grid_top_y = 525
-        grid_height = 780
-        row_step = grid_height / max(q_per_col, 1)
-
-        for q in range(1, num_questions + 1):
-            col_idx = (q - 1) // q_per_col
-            q_in_col = (q - 1) % q_per_col
-
-            if cols == 4:
-                col_x_start = 80 + (col_idx * 210)
-                opt_spacing = 30
-                r = 8
-            elif cols == 3:
-                col_x_start = 110 + (col_idx * 280)
-                opt_spacing = 38
-                r = 10
-            elif cols == 2:
-                col_x_start = 120 + (col_idx * 450)
-                opt_spacing = 52
-                r = 12
-            else:
-                col_x_start = 180
-                opt_spacing = 70
-                r = 14
-
-            row_y = grid_top_y + int(q_in_col * row_step)
-
+        for q in range(1, layout.num_questions + 1):
             option_fills = []
+            detected_bubbles = []
 
-            for opt_idx, letter in enumerate(options_letters):
-                cx = col_x_start + (60 if cols == 4 else 90) + (opt_idx * opt_spacing)
-                cy = row_y
+            for opt_idx, letter in enumerate(layout.options_letters):
+                cx, cy, r = layout.get_bubble_center(q, opt_idx)
 
-                y1, y2 = max(0, cy - r), min(WARP_HEIGHT, cy + r)
-                x1, x2 = max(0, cx - r), min(WARP_WIDTH, cx + r)
+                y1, y2 = max(0, cy - r), min(self.config.warp_height, cy + r)
+                x1, x2 = max(0, cx - r), min(self.config.warp_width, cx + r)
 
                 roi = thresh[y1:y2, x1:x2]
                 total_pixels = roi.size
@@ -256,62 +313,53 @@ class OMREngine:
                 ratio = dark_pixels / float(total_pixels) if total_pixels > 0 else 0.0
 
                 option_fills.append((letter, ratio, cx, cy))
+                detected_bubbles.append(DetectedBubble(letter=letter, fill_ratio=ratio, cx=cx, cy=cy))
 
             marked_opts = [opt for opt, fill_ratio, cx, cy in option_fills if fill_ratio >= threshold_ratio]
 
             if len(marked_opts) == 1:
-                respostas[str(q)] = marked_opts[0]
+                ans_str = marked_opts[0]
             elif len(marked_opts) > 1:
-                respostas[str(q)] = "|".join(marked_opts)
+                ans_str = "|".join(marked_opts)
             else:
-                respostas[str(q)] = "-"
+                ans_str = "-"
 
-            debug_bubbles.append((str(q), option_fills))
+            q_str = str(q)
+            respostas[q_str] = ans_str
+            debug_bubbles.append((q_str, option_fills))
 
-        return respostas, debug_bubbles
+            q_box = layout.get_question_bounding_box(q)
+            detected_questions.append(
+                DetectedQuestion(
+                    question_num=q,
+                    marked_answer=ans_str,
+                    options=detected_bubbles,
+                    box=q_box
+                )
+            )
+
+        return respostas, detected_questions, debug_bubbles
 
     def _get_question_bounding_box(
         self, q_num: int, num_questions: int, num_options: int, colunas: int
     ) -> list[int]:
-        cols = max(1, min(4, colunas))
-        q_per_col = (num_questions + cols - 1) // cols
-
-        col_idx = (q_num - 1) // q_per_col
-        q_in_col = (q_num - 1) % q_per_col
-
-        grid_top_y = 525
-        grid_height = 780
-        row_step = grid_height / max(q_per_col, 1)
-
-        row_y = grid_top_y + int(q_in_col * row_step)
-
-        if cols == 4:
-            col_x_start = 80 + (col_idx * 210)
-            box_w = 200
-        elif cols == 3:
-            col_x_start = 110 + (col_idx * 280)
-            box_w = 260
-        elif cols == 2:
-            col_x_start = 120 + (col_idx * 450)
-            box_w = 400
-        else:
-            col_x_start = 180
-            box_w = 550
-
-        x = col_x_start - 15
-        y = row_y - 15
-        w = box_w
-        h = max(24, int(row_step))
-
-        return [x, y, w, h]
+        """Legacy helper for question bounding box calculation."""
+        layout = SheetLayout(
+            num_questions=num_questions,
+            num_options=num_options,
+            colunas=colunas,
+            config=self.config
+        )
+        return layout.get_question_bounding_box(q_num).to_list()
 
     def _annotate_image(
         self,
         img: np.ndarray,
         respostas: dict,
-        gabarito: dict,
+        gabarito: Optional[dict],
         debug_bubbles: list
     ) -> np.ndarray:
+        """Draws debugging overlay onto the scanned sheet image."""
         annotated = img.copy()
 
         for q_str, option_fills in debug_bubbles:
@@ -324,13 +372,13 @@ class OMREngine:
 
                 if letter in marked_ans.split("|"):
                     if "|" in marked_ans:
-                        color = (0, 215, 255)
+                        color = (0, 215, 255)  # Cyan/Yellow for double mark
                         thickness = 3
                     elif gab_ans and letter == gab_ans:
-                        color = (0, 200, 0)
+                        color = (0, 200, 0)    # Green for correct
                         thickness = 3
                     elif gab_ans and letter != gab_ans:
-                        color = (0, 0, 255)
+                        color = (0, 0, 255)    # Red for incorrect
                         thickness = 3
 
                 cv2.circle(annotated, (cx, cy), 11, color, thickness)
